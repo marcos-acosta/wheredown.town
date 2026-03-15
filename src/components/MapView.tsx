@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import mapboxgl, { GeoJSONSource } from "mapbox-gl";
 import boundariesData from "../data/boundaries";
+import manhattanData from "../data/manhatan";
 import styles from "./MapView.module.css";
 
 const BEARING = 29;
@@ -55,6 +56,77 @@ const SORTED_BOUNDARIES = [...BOUNDARIES].sort(
   (a, b) =>
     a.interpolatedLat(INITIAL_CENTER[0]) - b.interpolatedLat(INITIAL_CENTER[0]),
 );
+
+const MANHATTAN_COORDS = (
+  manhattanData.features[0].geometry as GeoJSON.LineString
+).coordinates as [number, number][];
+
+// Index of the southernmost coastline point — splits west coast (0..tip) from east coast (tip..end)
+const COAST_TIP_INDEX = MANHATTAN_COORDS.reduce(
+  (best, c, i) => (c[1] < MANHATTAN_COORDS[best][1] ? i : best),
+  0
+);
+
+// Returns the exact intersection of an infinite line (through lp1→lp2) with a finite segment
+// (sp1→sp2), or null if they don't intersect within the segment.
+function lineSegmentIntersect(
+  lp1: [number, number], lp2: [number, number],
+  sp1: [number, number], sp2: [number, number]
+): [number, number] | null {
+  const dx1 = lp2[0] - lp1[0], dy1 = lp2[1] - lp1[1];
+  const dx2 = sp2[0] - sp1[0], dy2 = sp2[1] - sp1[1];
+  const denom = dx1 * dy2 - dy1 * dx2;
+  if (Math.abs(denom) < 1e-12) return null;
+  const u = ((sp1[0] - lp1[0]) * dy1 - (sp1[1] - lp1[1]) * dx1) / denom;
+  if (u < 0 || u > 1) return null;
+  const t = ((sp1[0] - lp1[0]) * dy2 - (sp1[1] - lp1[1]) * dx2) / denom;
+  return [lp1[0] + t * dx1, lp1[1] + t * dy1];
+}
+
+// Find where an infinite line (lp1→lp2) intersects the coastline within a range of segments.
+// Returns the intersection point and the index of the segment it crossed (the lower-index vertex).
+function findCoastIntersection(
+  lp1: [number, number], lp2: [number, number],
+  from: number, to: number
+): { point: [number, number]; seg: number } | null {
+  for (let i = from; i < to; i++) {
+    const pt = lineSegmentIntersect(lp1, lp2, MANHATTAN_COORDS[i], MANHATTAN_COORDS[i + 1]);
+    if (pt) return { point: pt, seg: i };
+  }
+  return null;
+}
+
+// Build a polygon covering Manhattan south of the given boundary.
+// The boundary line is extended as an infinite line to find the exact piercing points on
+// the west and east coastlines, eliminating the doubling-back artifact.
+function buildSouthernFill(boundary: Boundary): GeoJSON.Feature<GeoJSON.Polygon> {
+  const bCoords = boundary.coordinates;
+  const bFirst = bCoords[0];
+  const bLast = bCoords[bCoords.length - 1];
+
+  // Intersect the boundary line (extended infinitely) with each coast half
+  const westIsect = findCoastIntersection(bFirst, bLast, 0, COAST_TIP_INDEX);
+  const eastIsect = findCoastIntersection(bFirst, bLast, COAST_TIP_INDEX, MANHATTAN_COORDS.length - 1);
+
+  if (!westIsect || !eastIsect) {
+    // Fallback: just close with boundary endpoints (should never happen in practice)
+    return { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [[...bCoords, bCoords[0]]] } };
+  }
+
+  // Coastline slice: from just south of east intersection, around the tip, to just south of west intersection.
+  // Reversed so we trace: east coast (south) → tip → west coast (north).
+  const coastSlice = MANHATTAN_COORDS.slice(westIsect.seg + 1, eastIsect.seg + 1).reverse();
+
+  const ring: [number, number][] = [
+    ...bCoords,
+    eastIsect.point,  // exact pierce point on east coast
+    ...coastSlice,
+    westIsect.point,  // exact pierce point on west coast
+    bCoords[0],       // close
+  ];
+
+  return { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [ring] } };
+}
 
 // Move camera N pixels along BEARING direction using explicit geographic displacement.
 // This avoids the cardinal drift that panBy([0, delta]) causes on a rotated map.
@@ -130,15 +202,19 @@ export default function MapView() {
     }
 
     function updateGlowLine(boundary: Boundary) {
-      const source = map.getSource("active-boundary") as
-        | GeoJSONSource
-        | undefined;
+      const source = map.getSource("active-boundary") as GeoJSONSource | undefined;
       if (!source) return;
       source.setData({
         type: "Feature",
         properties: {},
         geometry: { type: "LineString", coordinates: boundary.coordinates },
       });
+    }
+
+    function updateFill(boundary: Boundary) {
+      const source = map.getSource("southern-fill") as GeoJSONSource | undefined;
+      if (!source) return;
+      source.setData(buildSouthernFill(boundary));
     }
 
     function snapToBoundary(boundary: Boundary) {
@@ -153,6 +229,7 @@ export default function MapView() {
     function handleScrollEnd() {
       const boundary = findClosestBoundary(map);
       updateGlowLine(boundary);
+      updateFill(boundary);
       updateLabel(boundary);
       snapToBoundary(boundary);
     }
@@ -167,6 +244,7 @@ export default function MapView() {
         panAlongBearing(map, pendingDeltaRef.current * SCROLL_SCALE);
         const closest = findClosestBoundary(map);
         updateGlowLine(closest);
+        updateFill(closest);
         updateLabel(closest);
         pendingDeltaRef.current = 0;
         rafRef.current = null;
@@ -197,6 +275,20 @@ export default function MapView() {
     }
 
     map.on("load", () => {
+      map.addSource("southern-fill", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addLayer({
+        id: "southern-fill-layer",
+        type: "fill",
+        source: "southern-fill",
+        paint: {
+          "fill-color": GLOW_COLOR,
+          "fill-opacity": 0.08,
+        },
+      });
+
       map.addSource("active-boundary", {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
@@ -226,6 +318,7 @@ export default function MapView() {
       const houston =
         BOUNDARIES.find((b) => b.name === "Houston") ?? BOUNDARIES[0];
       updateGlowLine(houston);
+      updateFill(houston);
       updateLabel(houston);
       snapToBoundary(houston);
 
