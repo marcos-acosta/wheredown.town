@@ -11,16 +11,13 @@
 
 .label {
   position: absolute;
-  left: calc(50% + 50px);
-  top: calc(50% - 150px);
+  left: 0;
+  top: calc(40%);
   transform: translateX(-50%);
-  color: #00ff88;
-  text-shadow:
-    0 0 2px #00ff88,
-    0 0 8px #00ff88,
-    0 0 15px #00ff8878;
+  color: var(--glow-color);
+  text-shadow: var(--glow-shadow);
   padding: 10px 14px 5px 14px;
-  font-family: sans-serif;
+  font-family: serif;
   font-size: 40px;
   font-weight: 600;
   letter-spacing: 0.05em;

@@ -1,21 +1,43 @@
-'use client'
+"use client";
+
+import styles from "./Intro.module.css";
 
 interface IntroProps {
-  onStart: () => void
+  onStart: () => void;
 }
 
 export default function Intro({ onStart }: IntroProps) {
   return (
-    <div style={{ position: 'fixed', inset: 0, background: '#000', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 32, textAlign: 'center' }}>
-      <h1 style={{ fontSize: 32, marginBottom: 24 }}>Where does downtown start?</h1>
-      <p style={{ maxWidth: 480, lineHeight: 1.6, marginBottom: 40, opacity: 0.8 }}>
-        Ask ten New Yorkers where downtown Manhattan ends and uptown begins,
-        and you&apos;ll get ten different answers. Houston Street? 14th? Canal?
-        Scroll the map to cast your vote.
-      </p>
-      <button onClick={onStart} style={{ padding: '12px 32px', fontSize: 18, cursor: 'pointer' }}>
-        Let&apos;s settle this
-      </button>
+    <div className={styles.wrapper}>
+      <div className={styles.innerContainer}>
+        <h1 className={styles.title}>wheredown.town</h1>
+        <div className={styles.quote}>
+          <div className={styles.quoteText}>
+            We consider Downtown Manhattan to be everything south of 30th Street
+          </div>
+          <div>&mdash; StreetEasy</div>
+        </div>
+        <div className={styles.quote}>
+          <div className={styles.quoteText}>
+            Despite various definitions of Lower Manhattan, they generally
+            include all of Manhattan Island south of 14th Street
+          </div>
+          <div>&mdash; Also Wikipedia</div>
+        </div>
+        <div className={styles.quote}>
+          <div className={styles.quoteText}>
+            I&apos;m thinking anything below Houston?
+          </div>
+          <div>&mdash; Reddit user</div>
+        </div>
+        <div className={styles.quote}>
+          <div className={styles.quoteText}>Mainly anything south of Canal</div>
+          <div>&mdash; Reddit user</div>
+        </div>
+        <button className={styles.button} onClick={onStart}>
+          Cast your vote
+        </button>
+      </div>
     </div>
-  )
+  );
 }

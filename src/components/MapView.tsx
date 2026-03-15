@@ -245,8 +245,28 @@ export default function MapView() {
     });
     mapRef.current = map;
 
+    function getBoundaryScreenMidpoint(boundary: Boundary): { x: number } {
+      const pts = boundary.coordinates.map((c) => map.project(c as [number, number]));
+      let totalLen = 0;
+      for (let i = 0; i < pts.length - 1; i++)
+        totalLen += Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y);
+      const half = totalLen / 2;
+      let accumulated = 0;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const segLen = Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y);
+        if (accumulated + segLen >= half) {
+          const t = (half - accumulated) / segLen;
+          return { x: pts[i].x + t * (pts[i + 1].x - pts[i].x) };
+        }
+        accumulated += segLen;
+      }
+      return { x: pts[pts.length - 1].x };
+    }
+
     function updateLabel(boundary: Boundary) {
-      if (labelRef.current) labelRef.current.textContent = boundary.name;
+      if (!labelRef.current) return;
+      labelRef.current.textContent = boundary.name;
+      labelRef.current.style.left = getBoundaryScreenMidpoint(boundary).x + 'px';
     }
 
     function updateGlowLine(boundary: Boundary) {
