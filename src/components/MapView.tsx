@@ -155,21 +155,30 @@ function panAlongBearing(map: mapboxgl.Map, pixels: number) {
   }
 }
 
+function ptToSegDist(
+  px: number, py: number,
+  ax: number, ay: number,
+  bx: number, by: number
+): number {
+  const dx = bx - ax, dy = by - ay;
+  const lenSq = dx * dx + dy * dy;
+  const t = lenSq === 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq));
+  return Math.hypot(px - ax - t * dx, py - ay - t * dy);
+}
+
 function findClosestBoundary(map: mapboxgl.Map): Boundary {
   const canvas = map.getCanvas();
-  const w = canvas.width / devicePixelRatio;
-  const h = canvas.height / devicePixelRatio;
-  const center = map.unproject([w / 2, h / 2]);
-  const centerLat = center.lat;
-  const centerLng = center.lng;
+  const cx = canvas.width  / devicePixelRatio / 2;
+  const cy = canvas.height / devicePixelRatio / 2;
 
   let closest = BOUNDARIES[0];
   let minDist = Infinity;
   for (const b of BOUNDARIES) {
-    const dist = Math.abs(b.interpolatedLat(centerLng) - centerLat);
-    if (dist < minDist) {
-      minDist = dist;
-      closest = b;
+    for (let i = 0; i < b.coordinates.length - 1; i++) {
+      const a = map.project(b.coordinates[i] as [number, number]);
+      const p = map.project(b.coordinates[i + 1] as [number, number]);
+      const d = ptToSegDist(cx, cy, a.x, a.y, p.x, p.y);
+      if (d < minDist) { minDist = d; closest = b; }
     }
   }
   return closest;
