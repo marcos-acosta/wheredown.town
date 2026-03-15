@@ -4,6 +4,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 0,
         mainStreet: "Battery Pl",
       },
       geometry: {
@@ -41,6 +42,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 1,
         mainStreet: "Morris St",
       },
       geometry: {
@@ -62,6 +64,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 2,
         mainStreet: "Exchange Pl",
       },
       geometry: {
@@ -87,6 +90,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 3,
         mainStreet: "Wall St",
       },
       geometry: {
@@ -107,6 +111,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 4,
         mainStreet: "Pine St",
       },
       geometry: {
@@ -125,6 +130,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 5,
         mainStreet: "John St",
       },
       geometry: {
@@ -143,6 +149,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 6,
         mainStreet: "Vesey St",
       },
       geometry: {
@@ -161,6 +168,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 7,
         mainStreet: "Murray St",
       },
       geometry: {
@@ -179,6 +187,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 8,
         mainStreet: "Chambers St ",
       },
       geometry: {
@@ -199,6 +208,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 9,
         mainStreet: "Duane St ",
       },
       geometry: {
@@ -227,6 +237,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 10,
         mainStreet: "Worth St",
       },
       geometry: {
@@ -248,6 +259,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 11,
         mainStreet: "Franklin St",
       },
       geometry: {
@@ -267,6 +279,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 12,
         mainStreet: "Walker St",
       },
       geometry: {
@@ -290,6 +303,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 13,
         mainStreet: "Canal St",
       },
       geometry: {
@@ -306,6 +320,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 14,
         mainStreet: "Hester St",
       },
       geometry: {
@@ -332,6 +347,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 15,
         mainStreet: "Grand St",
       },
       geometry: {
@@ -352,6 +368,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 16,
         mainStreet: "Delancey St",
       },
       geometry: {
@@ -376,6 +393,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 17,
         mainStreet: "Rivington St",
       },
       geometry: {
@@ -392,6 +410,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 18,
         mainStreet: "Stanton St",
       },
       geometry: {
@@ -408,6 +427,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 19,
         mainStreet: "Houston St",
       },
       geometry: {
@@ -426,6 +446,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 20,
         mainStreet: "2nd St",
       },
       geometry: {
@@ -451,6 +472,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 21,
         mainStreet: "4th St",
       },
       geometry: {
@@ -469,6 +491,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 22,
         mainStreet: "6th St",
       },
       geometry: {
@@ -484,6 +507,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 23,
         mainStreet: "St Mark's Pl",
       },
       geometry: {
@@ -503,6 +527,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 24,
         mainStreet: "10th St",
       },
       geometry: {
@@ -520,6 +545,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 25,
         mainStreet: "11th St",
       },
       geometry: {
@@ -539,6 +565,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 26,
         mainStreet: "12th St",
       },
       geometry: {
@@ -559,6 +586,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 27,
         mainStreet: "13th St",
       },
       geometry: {
@@ -573,6 +601,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 28,
         mainStreet: "14th St",
       },
       geometry: {
@@ -586,6 +615,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 29,
         mainStreet: "16th St",
       },
       geometry: {
@@ -601,6 +631,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 30,
         mainStreet: "18th St",
       },
       geometry: {
@@ -616,6 +647,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 31,
         mainStreet: "20th St",
       },
       geometry: {
@@ -630,6 +662,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 32,
         mainStreet: "22nd St",
       },
       geometry: {
@@ -646,6 +679,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 33,
         mainStreet: "24th St",
       },
       geometry: {
@@ -660,6 +694,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 34,
         mainStreet: "26th St",
       },
       geometry: {
@@ -675,6 +710,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 35,
         mainStreet: "28th St",
       },
       geometry: {
@@ -690,6 +726,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 36,
         mainStreet: "30th St",
       },
       geometry: {
@@ -705,6 +742,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 37,
         mainStreet: "32nd St",
       },
       geometry: {
@@ -720,6 +758,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 38,
         mainStreet: "34th St",
       },
       geometry: {
@@ -734,6 +773,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 39,
         mainStreet: "36th St",
       },
       geometry: {
@@ -749,6 +789,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 40,
         mainStreet: "38th St",
       },
       geometry: {
@@ -763,6 +804,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 41,
         mainStreet: "40th St",
       },
       geometry: {
@@ -778,6 +820,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 42,
         mainStreet: "42nd St",
       },
       geometry: {
@@ -793,6 +836,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 43,
         mainStreet: "44th St",
       },
       geometry: {
@@ -808,6 +852,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 44,
         mainStreet: "46th St",
       },
       geometry: {
@@ -822,6 +867,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 45,
         mainStreet: "48th St",
       },
       geometry: {
@@ -836,6 +882,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 46,
         mainStreet: "50th St",
       },
       geometry: {
@@ -850,6 +897,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 47,
         mainStreet: "52nd St",
       },
       geometry: {
@@ -865,6 +913,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 48,
         mainStreet: "54th St",
       },
       geometry: {
@@ -878,6 +927,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 49,
         mainStreet: "56th St",
       },
       geometry: {
@@ -892,6 +942,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 50,
         mainStreet: "58th St",
       },
       geometry: {
@@ -905,6 +956,7 @@ const boundaries: GeoJSON.FeatureCollection = {
     {
       type: "Feature",
       properties: {
+        index: 51,
         mainStreet: "59th St",
       },
       geometry: {
