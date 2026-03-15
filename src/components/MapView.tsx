@@ -7,7 +7,7 @@ import manhattanData from "../data/manhatan";
 import styles from "./MapView.module.css";
 
 const BEARING = 29;
-const INITIAL_CENTER: [number, number] = [-73.998, 40.7265];
+const INITIAL_CENTER: [number, number] = [-73.9927, 40.7356];
 const INITIAL_ZOOM = 13.5;
 const GLOW_COLOR = "#00ff88";
 const SNAP_DEBOUNCE_MS = 180;
@@ -64,17 +64,21 @@ const MANHATTAN_COORDS = (
 // Index of the southernmost coastline point — splits west coast (0..tip) from east coast (tip..end)
 const COAST_TIP_INDEX = MANHATTAN_COORDS.reduce(
   (best, c, i) => (c[1] < MANHATTAN_COORDS[best][1] ? i : best),
-  0
+  0,
 );
 
 // Returns the exact intersection of an infinite line (through lp1→lp2) with a finite segment
 // (sp1→sp2), or null if they don't intersect within the segment.
 function lineSegmentIntersect(
-  lp1: [number, number], lp2: [number, number],
-  sp1: [number, number], sp2: [number, number]
+  lp1: [number, number],
+  lp2: [number, number],
+  sp1: [number, number],
+  sp2: [number, number],
 ): [number, number] | null {
-  const dx1 = lp2[0] - lp1[0], dy1 = lp2[1] - lp1[1];
-  const dx2 = sp2[0] - sp1[0], dy2 = sp2[1] - sp1[1];
+  const dx1 = lp2[0] - lp1[0],
+    dy1 = lp2[1] - lp1[1];
+  const dx2 = sp2[0] - sp1[0],
+    dy2 = sp2[1] - sp1[1];
   const denom = dx1 * dy2 - dy1 * dx2;
   if (Math.abs(denom) < 1e-12) return null;
   const u = ((sp1[0] - lp1[0]) * dy1 - (sp1[1] - lp1[1]) * dx1) / denom;
@@ -86,11 +90,18 @@ function lineSegmentIntersect(
 // Find where an infinite line (lp1→lp2) intersects the coastline within a range of segments.
 // Returns the intersection point and the index of the segment it crossed (the lower-index vertex).
 function findCoastIntersection(
-  lp1: [number, number], lp2: [number, number],
-  from: number, to: number
+  lp1: [number, number],
+  lp2: [number, number],
+  from: number,
+  to: number,
 ): { point: [number, number]; seg: number } | null {
   for (let i = from; i < to; i++) {
-    const pt = lineSegmentIntersect(lp1, lp2, MANHATTAN_COORDS[i], MANHATTAN_COORDS[i + 1]);
+    const pt = lineSegmentIntersect(
+      lp1,
+      lp2,
+      MANHATTAN_COORDS[i],
+      MANHATTAN_COORDS[i + 1],
+    );
     if (pt) return { point: pt, seg: i };
   }
   return null;
@@ -99,33 +110,51 @@ function findCoastIntersection(
 // Build a polygon covering Manhattan south of the given boundary.
 // The boundary line is extended as an infinite line to find the exact piercing points on
 // the west and east coastlines, eliminating the doubling-back artifact.
-function buildSouthernFill(boundary: Boundary): GeoJSON.Feature<GeoJSON.Polygon> {
+function buildSouthernFill(
+  boundary: Boundary,
+): GeoJSON.Feature<GeoJSON.Polygon> {
   const bCoords = boundary.coordinates;
   const bFirst = bCoords[0];
   const bLast = bCoords[bCoords.length - 1];
 
   // Intersect the boundary line (extended infinitely) with each coast half
   const westIsect = findCoastIntersection(bFirst, bLast, 0, COAST_TIP_INDEX);
-  const eastIsect = findCoastIntersection(bFirst, bLast, COAST_TIP_INDEX, MANHATTAN_COORDS.length - 1);
+  const eastIsect = findCoastIntersection(
+    bFirst,
+    bLast,
+    COAST_TIP_INDEX,
+    MANHATTAN_COORDS.length - 1,
+  );
 
   if (!westIsect || !eastIsect) {
     // Fallback: just close with boundary endpoints (should never happen in practice)
-    return { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [[...bCoords, bCoords[0]]] } };
+    return {
+      type: "Feature",
+      properties: {},
+      geometry: { type: "Polygon", coordinates: [[...bCoords, bCoords[0]]] },
+    };
   }
 
   // Coastline slice: from just south of east intersection, around the tip, to just south of west intersection.
   // Reversed so we trace: east coast (south) → tip → west coast (north).
-  const coastSlice = MANHATTAN_COORDS.slice(westIsect.seg + 1, eastIsect.seg + 1).reverse();
+  const coastSlice = MANHATTAN_COORDS.slice(
+    westIsect.seg + 1,
+    eastIsect.seg + 1,
+  ).reverse();
 
   const ring: [number, number][] = [
     ...bCoords,
-    eastIsect.point,  // exact pierce point on east coast
+    eastIsect.point, // exact pierce point on east coast
     ...coastSlice,
-    westIsect.point,  // exact pierce point on west coast
-    bCoords[0],       // close
+    westIsect.point, // exact pierce point on west coast
+    bCoords[0], // close
   ];
 
-  return { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [ring] } };
+  return {
+    type: "Feature",
+    properties: {},
+    geometry: { type: "Polygon", coordinates: [ring] },
+  };
 }
 
 // Move camera N pixels along BEARING direction using explicit geographic displacement.
@@ -156,19 +185,26 @@ function panAlongBearing(map: mapboxgl.Map, pixels: number) {
 }
 
 function ptToSegDist(
-  px: number, py: number,
-  ax: number, ay: number,
-  bx: number, by: number
+  px: number,
+  py: number,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
 ): number {
-  const dx = bx - ax, dy = by - ay;
+  const dx = bx - ax,
+    dy = by - ay;
   const lenSq = dx * dx + dy * dy;
-  const t = lenSq === 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq));
+  const t =
+    lenSq === 0
+      ? 0
+      : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq));
   return Math.hypot(px - ax - t * dx, py - ay - t * dy);
 }
 
 function findClosestBoundary(map: mapboxgl.Map): Boundary {
   const canvas = map.getCanvas();
-  const cx = canvas.width  / devicePixelRatio / 2;
+  const cx = canvas.width / devicePixelRatio / 2;
   const cy = canvas.height / devicePixelRatio / 2;
 
   let closest = BOUNDARIES[0];
@@ -178,7 +214,10 @@ function findClosestBoundary(map: mapboxgl.Map): Boundary {
       const a = map.project(b.coordinates[i] as [number, number]);
       const p = map.project(b.coordinates[i + 1] as [number, number]);
       const d = ptToSegDist(cx, cy, a.x, a.y, p.x, p.y);
-      if (d < minDist) { minDist = d; closest = b; }
+      if (d < minDist) {
+        minDist = d;
+        closest = b;
+      }
     }
   }
   return closest;
@@ -211,7 +250,9 @@ export default function MapView() {
     }
 
     function updateGlowLine(boundary: Boundary) {
-      const source = map.getSource("active-boundary") as GeoJSONSource | undefined;
+      const source = map.getSource("active-boundary") as
+        | GeoJSONSource
+        | undefined;
       if (!source) return;
       source.setData({
         type: "Feature",
@@ -221,7 +262,9 @@ export default function MapView() {
     }
 
     function updateFill(boundary: Boundary) {
-      const source = map.getSource("southern-fill") as GeoJSONSource | undefined;
+      const source = map.getSource("southern-fill") as
+        | GeoJSONSource
+        | undefined;
       if (!source) return;
       source.setData(buildSouthernFill(boundary));
     }
@@ -244,7 +287,6 @@ export default function MapView() {
     }
 
     function applyDelta(delta: number) {
-      // Cancel any in-progress snap so it doesn't fight the new input
       map.stop();
 
       pendingDeltaRef.current += delta;
@@ -325,7 +367,7 @@ export default function MapView() {
       });
 
       const houston =
-        BOUNDARIES.find((b) => b.name === "Houston") ?? BOUNDARIES[0];
+        BOUNDARIES.find((b) => b.name === "14th St") ?? BOUNDARIES[0];
       updateGlowLine(houston);
       updateFill(houston);
       updateLabel(houston);
