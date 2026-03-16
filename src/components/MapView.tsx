@@ -4,15 +4,20 @@ import { useEffect, useRef } from "react";
 import mapboxgl, { GeoJSONSource } from "mapbox-gl";
 import boundariesData from "../data/boundaries";
 import { manhattanData, manhattanCenter } from "../data/manhattan";
+import regionsData from "../data/regions";
+import { RegionShare } from "../lib/types";
 import styles from "./MapView.module.css";
 
 const BEARING = 29;
 const INITIAL_CENTER: [number, number] = [-73.9927, 40.7356];
 const INITIAL_ZOOM = 13.5;
+const RESULTS_CENTER: [number, number] = [-73.9903, 40.7345];
+const RESULTS_ZOOM = 12.5;
 const GLOW_COLOR = "#00ff88";
 const SNAP_DEBOUNCE_MS = 180;
 const SCROLL_SCALE = 0.2;
 const DOWNTOWN_LABEL_FONT_SIZE = 28;
+const MAX_REGION_OPACITY = 0.55;
 
 interface Boundary {
   index: number;
@@ -36,7 +41,12 @@ function parseBoundaries(): Boundary[] {
       downtownFontScale?: number;
       downtownRotation?: number;
     };
-    const { index, mainStreet: name, downtownFontScale, downtownRotation } = props;
+    const {
+      index,
+      mainStreet: name,
+      downtownFontScale,
+      downtownRotation,
+    } = props;
 
     function interpolatedLat(targetLng: number): number {
       if (targetLng <= coords[0][0]) return coords[0][1];
@@ -78,12 +88,10 @@ const MANHATTAN_COORDS = (
   manhattanData.features[0].geometry as GeoJSON.LineString
 ).coordinates as [number, number][];
 
-// Index of the southernmost coastline point — splits west coast (0..tip) from east coast (tip..end)
 const CENTER_COORDS = (
   manhattanCenter.features[0].geometry as GeoJSON.LineString
 ).coordinates as [number, number][];
 
-// Given a target lat, interpolate the lng along the manhattanCenter line.
 function centerLngAtLat(targetLat: number): number {
   if (targetLat <= CENTER_COORDS[0][1]) return CENTER_COORDS[0][0];
   if (targetLat >= CENTER_COORDS[CENTER_COORDS.length - 1][1])
@@ -104,8 +112,6 @@ const COAST_TIP_INDEX = MANHATTAN_COORDS.reduce(
   0,
 );
 
-// Returns the exact intersection of an infinite line (through lp1→lp2) with a finite segment
-// (sp1→sp2), or null if they don't intersect within the segment.
 function lineSegmentIntersect(
   lp1: [number, number],
   lp2: [number, number],
@@ -124,8 +130,6 @@ function lineSegmentIntersect(
   return [lp1[0] + t * dx1, lp1[1] + t * dy1];
 }
 
-// Find where an infinite line (lp1→lp2) intersects the coastline within a range of segments.
-// Returns the intersection point and the index of the segment it crossed (the lower-index vertex).
 function findCoastIntersection(
   lp1: [number, number],
   lp2: [number, number],
@@ -144,9 +148,6 @@ function findCoastIntersection(
   return null;
 }
 
-// Build a polygon covering Manhattan south of the given boundary.
-// The boundary line is extended as an infinite line to find the exact piercing points on
-// the west and east coastlines, eliminating the doubling-back artifact.
 function buildSouthernFill(
   boundary: Boundary,
 ): GeoJSON.Feature<GeoJSON.Polygon> {
@@ -154,7 +155,6 @@ function buildSouthernFill(
   const bFirst = bCoords[0];
   const bLast = bCoords[bCoords.length - 1];
 
-  // Intersect the boundary line (extended infinitely) with each coast half
   const westIsect = findCoastIntersection(bFirst, bLast, 0, COAST_TIP_INDEX);
   const eastIsect = findCoastIntersection(
     bFirst,
@@ -164,7 +164,6 @@ function buildSouthernFill(
   );
 
   if (!westIsect || !eastIsect) {
-    // Fallback: just close with boundary endpoints (should never happen in practice)
     return {
       type: "Feature",
       properties: {},
@@ -172,8 +171,6 @@ function buildSouthernFill(
     };
   }
 
-  // Coastline slice: from just south of east intersection, around the tip, to just south of west intersection.
-  // Reversed so we trace: east coast (south) → tip → west coast (north).
   const coastSlice = MANHATTAN_COORDS.slice(
     westIsect.seg + 1,
     eastIsect.seg + 1,
@@ -181,10 +178,10 @@ function buildSouthernFill(
 
   const ring: [number, number][] = [
     ...bCoords,
-    eastIsect.point, // exact pierce point on east coast
+    eastIsect.point,
     ...coastSlice,
-    westIsect.point, // exact pierce point on west coast
-    bCoords[0], // close
+    westIsect.point,
+    bCoords[0],
   ];
 
   return {
@@ -194,8 +191,6 @@ function buildSouthernFill(
   };
 }
 
-// Move camera N pixels along BEARING direction using explicit geographic displacement.
-// This avoids the cardinal drift that panBy([0, delta]) causes on a rotated map.
 function panAlongBearing(map: mapboxgl.Map, pixels: number) {
   const center = map.getCenter();
   const mpp =
@@ -208,7 +203,6 @@ function panAlongBearing(map: mapboxgl.Map, pixels: number) {
     (meters * Math.sin(rad)) /
     (111111 * Math.cos((center.lat * Math.PI) / 180));
 
-  // Clamp to the lat range of the outermost boundaries — if clamped, suppress lng too
   const minLat = SORTED_BOUNDARIES[0].interpolatedLat(center.lng);
   const maxLat = SORTED_BOUNDARIES[
     SORTED_BOUNDARIES.length - 1
@@ -263,9 +257,10 @@ function findClosestBoundary(map: mapboxgl.Map): Boundary {
 interface MapViewProps {
   onVote: (boundaryIndex: number) => void;
   voted: boolean;
+  regionShares: RegionShare[];
 }
 
-export default function MapView({ onVote, voted }: MapViewProps) {
+export default function MapView({ onVote, voted, regionShares }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const labelRef = useRef<HTMLDivElement>(null);
   const downtownLabelRef = useRef<HTMLDivElement>(null);
@@ -275,7 +270,46 @@ export default function MapView({ onVote, voted }: MapViewProps) {
   const pendingDeltaRef = useRef(0);
   const touchStartYRef = useRef<number | null>(null);
   const activeBoundaryRef = useRef<Boundary>(BOUNDARIES[0]);
+  const votedRef = useRef(voted);
+  const regionSharesRef = useRef(regionShares);
+  // Stored inside main useEffect so it captures `map`; called by voted useEffect
+  const enterResultsModeRef = useRef<(() => void) | null>(null);
+  const hoverCleanupRef = useRef<(() => void) | null>(null);
 
+  // Keep refs in sync with props
+  useEffect(() => {
+    votedRef.current = voted;
+  }, [voted]);
+
+  useEffect(() => {
+    regionSharesRef.current = regionShares;
+  }, [regionShares]);
+
+  // Update Mapbox feature states when regionShares changes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !voted || regionShares.length === 0 || !map.isStyleLoaded())
+      return;
+    regionShares.forEach((region, i) => {
+      map.setFeatureState(
+        { source: "regions", id: i },
+        { share: region.percent },
+      );
+    });
+  }, [regionShares, voted]);
+
+  // Enter results mode when voted flips to true (map already loaded)
+  useEffect(() => {
+    if (!voted) return;
+    const map = mapRef.current;
+    if (!map) return;
+    if (map.isStyleLoaded() && enterResultsModeRef.current) {
+      enterResultsModeRef.current();
+    }
+    // If not yet loaded, map.on('load') will call it via votedRef check
+  }, [voted]);
+
+  // Main map setup — runs once
   useEffect(() => {
     mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN!;
 
@@ -289,7 +323,10 @@ export default function MapView({ onVote, voted }: MapViewProps) {
     });
     mapRef.current = map;
 
-    function getBoundaryScreenMidpoint(boundary: Boundary): { x: number } {
+    function getBoundaryScreenMidpoint(boundary: Boundary): {
+      x: number;
+      y: number;
+    } {
       const pts = boundary.coordinates.map((c) =>
         map.project(c as [number, number]),
       );
@@ -308,11 +345,14 @@ export default function MapView({ onVote, voted }: MapViewProps) {
         );
         if (accumulated + segLen >= half) {
           const t = (half - accumulated) / segLen;
-          return { x: pts[i].x + t * (pts[i + 1].x - pts[i].x) };
+          return {
+            x: pts[i].x + t * (pts[i + 1].x - pts[i].x),
+            y: pts[i].y + t * (pts[i + 1].y - pts[i].y),
+          };
         }
         accumulated += segLen;
       }
-      return { x: pts[pts.length - 1].x };
+      return { x: pts[pts.length - 1].x, y: pts[pts.length - 1].y };
     }
 
     function updateAll(boundary: Boundary) {
@@ -326,8 +366,9 @@ export default function MapView({ onVote, voted }: MapViewProps) {
     function updateLabel(boundary: Boundary) {
       if (!labelRef.current) return;
       labelRef.current.textContent = boundary.name;
-      labelRef.current.style.left =
-        getBoundaryScreenMidpoint(boundary).x + "px";
+      const { x } = getBoundaryScreenMidpoint(boundary);
+      labelRef.current.style.left = x + "px";
+      labelRef.current.style.top = "";
     }
 
     function updateGlowLine(boundary: Boundary) {
@@ -345,8 +386,6 @@ export default function MapView({ onVote, voted }: MapViewProps) {
     function updateDowntownLabel(boundary: Boundary) {
       if (!downtownLabelRef.current) return;
       const tipLat = MANHATTAN_COORDS[COAST_TIP_INDEX][1];
-      // Use the center line's lng at the tip as a stable reference longitude,
-      // get the boundary lat there, then find the vertical midpoint between them.
       const refLng = centerLngAtLat(tipLat);
       const midLat = (tipLat + boundary.interpolatedLat(refLng)) / 2;
       const midLng = centerLngAtLat(midLat);
@@ -382,6 +421,7 @@ export default function MapView({ onVote, voted }: MapViewProps) {
     }
 
     function applyDelta(delta: number) {
+      if (votedRef.current) return;
       map.stop();
 
       pendingDeltaRef.current += delta;
@@ -418,7 +458,117 @@ export default function MapView({ onVote, voted }: MapViewProps) {
       applyDelta(dy);
     }
 
+    // --- Results mode ---
+
+    function enterResultsMode() {
+      // Hide voting UI
+      if (downtownLabelRef.current)
+        downtownLabelRef.current.style.display = "none";
+      if (labelRef.current) labelRef.current.innerHTML = "";
+
+      // Clear voting layers
+      (map.getSource("active-boundary") as GeoJSONSource)?.setData({
+        type: "FeatureCollection",
+        features: [],
+      });
+      (map.getSource("southern-fill") as GeoJSONSource)?.setData({
+        type: "FeatureCollection",
+        features: [],
+      });
+
+      // Zoom out to show all boundaries
+      map.easeTo({
+        center: RESULTS_CENTER,
+        zoom: RESULTS_ZOOM,
+        bearing: BEARING,
+        duration: 1000,
+      });
+
+      // Apply any regionShares that arrived before results mode was entered
+      regionSharesRef.current.forEach((region, i) => {
+        map.setFeatureState(
+          { source: "regions", id: i },
+          { share: region.percent },
+        );
+      });
+
+      // Hover: use queryRenderedFeatures (works without interactive: true)
+      const container = containerRef.current!;
+      let lastHoveredIndex: number | null = null;
+
+      function onMouseMove(e: MouseEvent) {
+        const rect = container.getBoundingClientRect();
+        const pt = [e.clientX - rect.left, e.clientY - rect.top] as [
+          number,
+          number,
+        ];
+        const features = map.queryRenderedFeatures(pt, {
+          layers: ["regions-fill"],
+        });
+
+        if (!features.length) {
+          if (lastHoveredIndex !== null) clearHover();
+          return;
+        }
+
+        const idx = features[0].properties!.index as number;
+        if (idx === lastHoveredIndex) return;
+        lastHoveredIndex = idx;
+
+        // Dim all regions above hovered
+        const n = (regionsData as GeoJSON.FeatureCollection).features.length;
+        for (let i = 0; i < n; i++) {
+          map.setFeatureState(
+            { source: "regions", id: i },
+            { dimmed: i > idx },
+          );
+        }
+
+        // Position label above the boundary that forms the top of the hovered region
+        if (labelRef.current) {
+          const boundary = SORTED_BOUNDARIES[idx];
+          const { x, y } = getBoundaryScreenMidpoint(boundary);
+          const pct = regionSharesRef.current[idx]?.percent ?? 0;
+          if (pct === 0) {
+            labelRef.current.innerHTML = "";
+          } else {
+            labelRef.current.innerHTML = `${Math.round(pct * 100)}%<br><span class="${styles.labelSub}">consider ${boundary.name} downtown</span>`;
+            labelRef.current.style.left = x + "px";
+            labelRef.current.style.top = y - 110 + "px";
+          }
+        }
+      }
+
+      function clearHover() {
+        lastHoveredIndex = null;
+        if (labelRef.current) labelRef.current.innerHTML = "";
+        const n = (regionsData as GeoJSON.FeatureCollection).features.length;
+        for (let i = 0; i < n; i++) {
+          map.setFeatureState({ source: "regions", id: i }, { dimmed: false });
+        }
+      }
+
+      container.addEventListener("mousemove", onMouseMove);
+      container.addEventListener("mouseleave", clearHover);
+      hoverCleanupRef.current = () => {
+        container.removeEventListener("mousemove", onMouseMove);
+        container.removeEventListener("mouseleave", clearHover);
+      };
+    }
+
+    enterResultsModeRef.current = enterResultsMode;
+
+    // --- Map load ---
+
     map.on("load", () => {
+      // Hide all built-in symbol layers (street names, place labels, POIs, etc.)
+      map.getStyle().layers.forEach((layer) => {
+        if (layer.type === "symbol") {
+          map.setLayoutProperty(layer.id, "visibility", "none");
+        }
+      });
+
+      // Voting layers
       map.addSource("southern-fill", {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
@@ -427,10 +577,7 @@ export default function MapView({ onVote, voted }: MapViewProps) {
         id: "southern-fill-layer",
         type: "fill",
         source: "southern-fill",
-        paint: {
-          "fill-color": GLOW_COLOR,
-          "fill-opacity": 0.08,
-        },
+        paint: { "fill-color": GLOW_COLOR, "fill-opacity": 0.08 },
       });
 
       map.addSource("active-boundary", {
@@ -455,14 +602,42 @@ export default function MapView({ onVote, voted }: MapViewProps) {
         paint: {
           "line-color": GLOW_COLOR,
           "line-width": 2.5,
-          "line-opacity": 1.0,
+          "line-opacity": 1,
         },
       });
 
-      const houston =
-        BOUNDARIES.find((b) => b.name === "14th St") ?? BOUNDARIES[0];
-      updateAll(houston);
-      snapToBoundary(houston);
+      // Results layer — always added; opacity driven by feature-state
+      map.addSource("regions", {
+        type: "geojson",
+        data: regionsData as GeoJSON.FeatureCollection,
+      });
+      map.addLayer({
+        id: "regions-fill",
+        type: "fill",
+        source: "regions",
+        paint: {
+          "fill-color": GLOW_COLOR,
+          "fill-opacity": [
+            "case",
+            ["boolean", ["feature-state", "dimmed"], false],
+            0,
+            [
+              "*",
+              MAX_REGION_OPACITY,
+              ["number", ["feature-state", "share"], 0],
+            ],
+          ],
+        },
+      });
+
+      if (votedRef.current) {
+        enterResultsMode();
+      } else {
+        const initial =
+          BOUNDARIES.find((b) => b.name === "14th St") ?? BOUNDARIES[0];
+        updateAll(initial);
+        snapToBoundary(initial);
+      }
 
       const container = containerRef.current!;
       container.addEventListener("wheel", onWheel, { passive: false });
@@ -473,6 +648,7 @@ export default function MapView({ onVote, voted }: MapViewProps) {
     return () => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+      if (hoverCleanupRef.current) hoverCleanupRef.current();
       const container = containerRef.current;
       if (container) {
         container.removeEventListener("wheel", onWheel);

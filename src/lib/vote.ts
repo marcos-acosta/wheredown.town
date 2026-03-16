@@ -14,7 +14,7 @@ const LOCAL_STORAGE_KEY = "downtown_vote";
 export const IS_TEST = process.env.NEXT_PUBLIC_ENV === "test";
 
 export function getSavedVote(): number | null {
-  if (IS_TEST) return null;
+  if (IS_TEST) return null; // ignore saved vote in test mode so voting can be repeated
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
     return raw !== null ? Number(raw) : null;
@@ -24,7 +24,7 @@ export function getSavedVote(): number | null {
 }
 
 export async function submitVote(boundaryIndex: number): Promise<void> {
-  if (!IS_TEST) localStorage.setItem(LOCAL_STORAGE_KEY, String(boundaryIndex));
+  localStorage.setItem(LOCAL_STORAGE_KEY, String(boundaryIndex));
 
   await addDoc(VOTES_COLLECTION, {
     boundaryIndex,

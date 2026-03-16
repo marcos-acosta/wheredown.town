@@ -26,6 +26,14 @@
   border-radius: 10px;
 }
 
+.labelSub {
+  display: block;
+  font-size: 18px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  margin-top: 4px;
+}
+
 .voteButton {
   position: absolute;
   top: 40px;

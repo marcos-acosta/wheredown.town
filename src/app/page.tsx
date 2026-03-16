@@ -9,16 +9,12 @@ import {
   getSavedVote,
   IS_TEST,
 } from "@/lib/vote";
+import { RegionShare } from "@/lib/types";
 import boundariesData from "@/data/boundaries";
 
 const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
 
 type Phase = "intro" | "map" | "results";
-
-interface RegionShare {
-  number: number;
-  percent: number;
-}
 
 // Returns N+1 entries where entry i represents the region between boundary[i-1] and boundary[i].
 // Entry 0 = south of the first boundary (always 100% downtown).
@@ -42,6 +38,7 @@ function buildRegionShares(
 
 export default function Home() {
   const [phase, setPhase] = useState<Phase>("intro");
+  const [regionShares, setRegionShares] = useState<RegionShare[]>([]);
 
   useEffect(() => {
     if (getSavedVote() !== null) setPhase("results");
@@ -51,9 +48,8 @@ export default function Home() {
     if (phase !== "results") return;
     const unsubscribe = subscribeToTally((counts, total) => {
       const regions = buildRegionShares(counts, total);
-      if (IS_TEST) {
-        console.log(regions);
-      }
+      setRegionShares(regions);
+      if (IS_TEST) console.log(regions);
     });
     return unsubscribe;
   }, [phase]);
@@ -64,5 +60,11 @@ export default function Home() {
   }
 
   if (phase === "intro") return <Intro onStart={() => setPhase("map")} />;
-  return <MapView onVote={handleVote} voted={phase === "results"} />;
+  return (
+    <MapView
+      onVote={handleVote}
+      voted={phase === "results"}
+      regionShares={regionShares}
+    />
+  );
 }
