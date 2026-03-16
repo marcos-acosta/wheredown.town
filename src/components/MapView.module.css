@@ -25,3 +25,17 @@
   white-space: nowrap;
   border-radius: 10px;
 }
+
+.downtownLabel {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  color: var(--glow-color);
+  opacity: 0.35;
+  font-family: serif;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  pointer-events: none;
+  white-space: nowrap;
+  user-select: none;
+}

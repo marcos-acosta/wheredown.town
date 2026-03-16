@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import mapboxgl, { GeoJSONSource } from "mapbox-gl";
 import boundariesData from "../data/boundaries";
-import manhattanData from "../data/manhatan";
+import { manhattanData, manhattanCenter } from "../data/manhatan";
 import styles from "./MapView.module.css";
 
 const BEARING = 29;
@@ -62,6 +62,26 @@ const MANHATTAN_COORDS = (
 ).coordinates as [number, number][];
 
 // Index of the southernmost coastline point — splits west coast (0..tip) from east coast (tip..end)
+const CENTER_COORDS = (
+  manhattanCenter.features[0].geometry as GeoJSON.LineString
+).coordinates as [number, number][];
+
+// Given a target lat, interpolate the lng along the manhattanCenter line.
+function centerLngAtLat(targetLat: number): number {
+  if (targetLat <= CENTER_COORDS[0][1]) return CENTER_COORDS[0][0];
+  if (targetLat >= CENTER_COORDS[CENTER_COORDS.length - 1][1])
+    return CENTER_COORDS[CENTER_COORDS.length - 1][0];
+  for (let i = 0; i < CENTER_COORDS.length - 1; i++) {
+    const [lng0, lat0] = CENTER_COORDS[i];
+    const [lng1, lat1] = CENTER_COORDS[i + 1];
+    if (targetLat >= lat0 && targetLat <= lat1) {
+      const t = (targetLat - lat0) / (lat1 - lat0);
+      return lng0 + t * (lng1 - lng0);
+    }
+  }
+  return CENTER_COORDS[CENTER_COORDS.length - 1][0];
+}
+
 const COAST_TIP_INDEX = MANHATTAN_COORDS.reduce(
   (best, c, i) => (c[1] < MANHATTAN_COORDS[best][1] ? i : best),
   0,
@@ -226,6 +246,7 @@ function findClosestBoundary(map: mapboxgl.Map): Boundary {
 export default function MapView() {
   const containerRef = useRef<HTMLDivElement>(null);
   const labelRef = useRef<HTMLDivElement>(null);
+  const downtownLabelRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -246,14 +267,22 @@ export default function MapView() {
     mapRef.current = map;
 
     function getBoundaryScreenMidpoint(boundary: Boundary): { x: number } {
-      const pts = boundary.coordinates.map((c) => map.project(c as [number, number]));
+      const pts = boundary.coordinates.map((c) =>
+        map.project(c as [number, number]),
+      );
       let totalLen = 0;
       for (let i = 0; i < pts.length - 1; i++)
-        totalLen += Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y);
+        totalLen += Math.hypot(
+          pts[i + 1].x - pts[i].x,
+          pts[i + 1].y - pts[i].y,
+        );
       const half = totalLen / 2;
       let accumulated = 0;
       for (let i = 0; i < pts.length - 1; i++) {
-        const segLen = Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y);
+        const segLen = Math.hypot(
+          pts[i + 1].x - pts[i].x,
+          pts[i + 1].y - pts[i].y,
+        );
         if (accumulated + segLen >= half) {
           const t = (half - accumulated) / segLen;
           return { x: pts[i].x + t * (pts[i + 1].x - pts[i].x) };
@@ -263,10 +292,18 @@ export default function MapView() {
       return { x: pts[pts.length - 1].x };
     }
 
+    function updateAll(boundary: Boundary) {
+      updateGlowLine(boundary);
+      updateFill(boundary);
+      updateLabel(boundary);
+      updateDowntownLabel(boundary);
+    }
+
     function updateLabel(boundary: Boundary) {
       if (!labelRef.current) return;
       labelRef.current.textContent = boundary.name;
-      labelRef.current.style.left = getBoundaryScreenMidpoint(boundary).x + 'px';
+      labelRef.current.style.left =
+        getBoundaryScreenMidpoint(boundary).x + "px";
     }
 
     function updateGlowLine(boundary: Boundary) {
@@ -279,6 +316,19 @@ export default function MapView() {
         properties: {},
         geometry: { type: "LineString", coordinates: boundary.coordinates },
       });
+    }
+
+    function updateDowntownLabel(boundary: Boundary) {
+      if (!downtownLabelRef.current) return;
+      const tipLat = MANHATTAN_COORDS[COAST_TIP_INDEX][1];
+      // Use the center line's lng at the tip as a stable reference longitude,
+      // get the boundary lat there, then find the vertical midpoint between them.
+      const refLng = centerLngAtLat(tipLat);
+      const midLat = (tipLat + boundary.interpolatedLat(refLng)) / 2;
+      const midLng = centerLngAtLat(midLat);
+      const pt = map.project([midLng, midLat]);
+      downtownLabelRef.current.style.left = pt.x + "px";
+      downtownLabelRef.current.style.top = pt.y + "px";
     }
 
     function updateFill(boundary: Boundary) {
@@ -300,9 +350,6 @@ export default function MapView() {
 
     function handleScrollEnd() {
       const boundary = findClosestBoundary(map);
-      updateGlowLine(boundary);
-      updateFill(boundary);
-      updateLabel(boundary);
       snapToBoundary(boundary);
     }
 
@@ -314,9 +361,7 @@ export default function MapView() {
       rafRef.current = requestAnimationFrame(() => {
         panAlongBearing(map, pendingDeltaRef.current * SCROLL_SCALE);
         const closest = findClosestBoundary(map);
-        updateGlowLine(closest);
-        updateFill(closest);
-        updateLabel(closest);
+        updateAll(closest);
         pendingDeltaRef.current = 0;
         rafRef.current = null;
       });
@@ -388,9 +433,7 @@ export default function MapView() {
 
       const houston =
         BOUNDARIES.find((b) => b.name === "14th St") ?? BOUNDARIES[0];
-      updateGlowLine(houston);
-      updateFill(houston);
-      updateLabel(houston);
+      updateAll(houston);
       snapToBoundary(houston);
 
       const container = containerRef.current!;
@@ -416,6 +459,9 @@ export default function MapView() {
     <div className={styles.wrapper}>
       <div ref={containerRef} className={styles.map} />
       <div ref={labelRef} className={styles.label} />
+      <div ref={downtownLabelRef} className={styles.downtownLabel}>
+        DOWNTOWN
+      </div>
     </div>
   );
 }

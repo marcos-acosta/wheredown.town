@@ -1,4 +1,4 @@
-const manhattan: GeoJSON.FeatureCollection = {
+const manhattanData: GeoJSON.FeatureCollection = {
   type: "FeatureCollection",
   features: [
     {
@@ -95,4 +95,30 @@ const manhattan: GeoJSON.FeatureCollection = {
   ],
 };
 
-export default manhattan;
+const manhattanCenter: GeoJSON.FeatureCollection = {
+  type: "FeatureCollection",
+  features: [
+    {
+      type: "Feature",
+      properties: {},
+      geometry: {
+        type: "LineString",
+        coordinates: [
+          [-74.0164236, 40.7020276],
+          [-74.0095545, 40.7096122],
+          [-74.0033269, 40.7150731],
+          [-73.998065, 40.7200787],
+          [-73.9941899, 40.7250714],
+          [-73.9928885, 40.7300362],
+          [-73.9928885, 40.737009],
+          [-73.9922685, 40.7412958],
+          [-73.991406, 40.7452547],
+          [-73.990166, 40.748719],
+          [-73.9750529, 40.7697942],
+        ],
+      },
+    },
+  ],
+};
+
+export { manhattanData, manhattanCenter };
