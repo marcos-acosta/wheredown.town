@@ -26,6 +26,31 @@
   border-radius: 10px;
 }
 
+.voteButton {
+  position: absolute;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--dark);
+  background: var(--glow-color);
+  box-shadow: var(--glow-shadow);
+  padding: 8px 20px;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: bold;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: box-shadow 0.5s;
+}
+
+.voteButton:hover {
+  box-shadow:
+    0 0 3px var(--glow-color),
+    0 0 10px var(--glow-color),
+    0 0 15px var(--glow-color);
+}
+
 .downtownLabel {
   position: absolute;
   transform: translate(-50%, -50%); /* JS overrides this with rotation */

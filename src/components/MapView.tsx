@@ -15,6 +15,7 @@ const SCROLL_SCALE = 0.2;
 const DOWNTOWN_LABEL_FONT_SIZE = 28;
 
 interface Boundary {
+  index: number;
   name: string;
   coordinates: [number, number][];
   interpolatedLat: (lng: number) => number;
@@ -30,13 +31,12 @@ function parseBoundaries(): Boundary[] {
       number,
     ][];
     const props = feature.properties as {
+      index: number;
       mainStreet: string;
       downtownFontScale?: number;
       downtownRotation?: number;
     };
-    const name = props.mainStreet;
-    const downtownFontScale = props.downtownFontScale;
-    const downtownRotation = props.downtownRotation;
+    const { index, mainStreet: name, downtownFontScale, downtownRotation } = props;
 
     function interpolatedLat(targetLng: number): number {
       if (targetLng <= coords[0][0]) return coords[0][1];
@@ -56,6 +56,7 @@ function parseBoundaries(): Boundary[] {
     }
 
     return {
+      index,
       name,
       coordinates: coords,
       interpolatedLat,
@@ -259,7 +260,12 @@ function findClosestBoundary(map: mapboxgl.Map): Boundary {
   return closest;
 }
 
-export default function MapView() {
+interface MapViewProps {
+  onVote: (boundaryIndex: number) => void;
+  voted: boolean;
+}
+
+export default function MapView({ onVote, voted }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const labelRef = useRef<HTMLDivElement>(null);
   const downtownLabelRef = useRef<HTMLDivElement>(null);
@@ -268,6 +274,7 @@ export default function MapView() {
   const rafRef = useRef<number | null>(null);
   const pendingDeltaRef = useRef(0);
   const touchStartYRef = useRef<number | null>(null);
+  const activeBoundaryRef = useRef<Boundary>(BOUNDARIES[0]);
 
   useEffect(() => {
     mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN!;
@@ -309,6 +316,7 @@ export default function MapView() {
     }
 
     function updateAll(boundary: Boundary) {
+      activeBoundaryRef.current = boundary;
       updateGlowLine(boundary);
       updateFill(boundary);
       updateLabel(boundary);
@@ -482,6 +490,14 @@ export default function MapView() {
       <div ref={downtownLabelRef} className={styles.downtownLabel}>
         DOWNTOWN
       </div>
+      {!voted && (
+        <button
+          className={styles.voteButton}
+          onClick={() => onVote(activeBoundaryRef.current.index)}
+        >
+          This is downtown
+        </button>
+      )}
     </div>
   );
 }
