@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import mapboxgl, { GeoJSONSource } from "mapbox-gl";
 import boundariesData from "../data/boundaries";
-import { manhattanData, manhattanCenter } from "../data/manhatan";
+import { manhattanData, manhattanCenter } from "../data/manhattan";
 import styles from "./MapView.module.css";
 
 const BEARING = 29;
@@ -29,7 +29,11 @@ function parseBoundaries(): Boundary[] {
       number,
       number,
     ][];
-    const props = feature.properties as { mainStreet: string; downtownFontScale?: number; downtownRotation?: number };
+    const props = feature.properties as {
+      mainStreet: string;
+      downtownFontScale?: number;
+      downtownRotation?: number;
+    };
     const name = props.mainStreet;
     const downtownFontScale = props.downtownFontScale;
     const downtownRotation = props.downtownRotation;
@@ -51,7 +55,13 @@ function parseBoundaries(): Boundary[] {
       return coords[coords.length - 1][1];
     }
 
-    return { name, coordinates: coords, interpolatedLat, downtownFontScale, downtownRotation };
+    return {
+      name,
+      coordinates: coords,
+      interpolatedLat,
+      downtownFontScale,
+      downtownRotation,
+    };
   });
 }
 
@@ -336,7 +346,8 @@ export default function MapView() {
       downtownLabelRef.current.style.left = pt.x + "px";
       downtownLabelRef.current.style.top = pt.y + "px";
       const scale = boundary.downtownFontScale ?? 1;
-      downtownLabelRef.current.style.fontSize = scale * DOWNTOWN_LABEL_FONT_SIZE + "px";
+      downtownLabelRef.current.style.fontSize =
+        scale * DOWNTOWN_LABEL_FONT_SIZE + "px";
       downtownLabelRef.current.style.transform = `translate(-50%, -50%) rotate(${boundary.downtownRotation ?? 0}deg)`;
     }
 
