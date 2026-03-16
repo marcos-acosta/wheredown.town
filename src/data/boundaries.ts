@@ -7,6 +7,7 @@ const boundaries: GeoJSON.FeatureCollection = {
         index: 0,
         mainStreet: "Battery Pl",
         downtownFontScale: 0.3,
+        downtownRotation: 20,
       },
       geometry: {
         type: "LineString",
@@ -45,7 +46,8 @@ const boundaries: GeoJSON.FeatureCollection = {
       properties: {
         index: 1,
         mainStreet: "Morris St",
-        downtownFontScale: 0.4,
+        downtownFontScale: 0.5,
+        downtownRotation: 10,
       },
       geometry: {
         type: "LineString",
@@ -68,7 +70,8 @@ const boundaries: GeoJSON.FeatureCollection = {
       properties: {
         index: 2,
         mainStreet: "Exchange Pl",
-        downtownFontScale: 0.5,
+        downtownFontScale: 0.6,
+        downtownRotation: 5,
       },
       geometry: {
         type: "LineString",
@@ -95,7 +98,7 @@ const boundaries: GeoJSON.FeatureCollection = {
       properties: {
         index: 3,
         mainStreet: "Wall St",
-        downtownFontScale: 0.65,
+        downtownFontScale: 0.7,
       },
       geometry: {
         type: "LineString",

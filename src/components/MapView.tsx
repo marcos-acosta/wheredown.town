@@ -19,6 +19,7 @@ interface Boundary {
   coordinates: [number, number][];
   interpolatedLat: (lng: number) => number;
   downtownFontScale?: number;
+  downtownRotation?: number;
 }
 
 function parseBoundaries(): Boundary[] {
@@ -28,9 +29,10 @@ function parseBoundaries(): Boundary[] {
       number,
       number,
     ][];
-    const props = feature.properties as { mainStreet: string; downtownFontScale?: number };
+    const props = feature.properties as { mainStreet: string; downtownFontScale?: number; downtownRotation?: number };
     const name = props.mainStreet;
     const downtownFontScale = props.downtownFontScale;
+    const downtownRotation = props.downtownRotation;
 
     function interpolatedLat(targetLng: number): number {
       if (targetLng <= coords[0][0]) return coords[0][1];
@@ -49,7 +51,7 @@ function parseBoundaries(): Boundary[] {
       return coords[coords.length - 1][1];
     }
 
-    return { name, coordinates: coords, interpolatedLat, downtownFontScale };
+    return { name, coordinates: coords, interpolatedLat, downtownFontScale, downtownRotation };
   });
 }
 
@@ -335,6 +337,7 @@ export default function MapView() {
       downtownLabelRef.current.style.top = pt.y + "px";
       const scale = boundary.downtownFontScale ?? 1;
       downtownLabelRef.current.style.fontSize = scale * DOWNTOWN_LABEL_FONT_SIZE + "px";
+      downtownLabelRef.current.style.transform = `translate(-50%, -50%) rotate(${boundary.downtownRotation ?? 0}deg)`;
     }
 
     function updateFill(boundary: Boundary) {

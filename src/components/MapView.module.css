@@ -28,7 +28,7 @@
 
 .downtownLabel {
   position: absolute;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%); /* JS overrides this with rotation */
   color: var(--glow-color);
   opacity: 0.35;
   font-family: serif;
