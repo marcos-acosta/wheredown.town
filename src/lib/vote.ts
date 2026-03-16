@@ -11,7 +11,7 @@ const TALLY_DOC = doc(db, "meta", "tally");
 const VOTES_COLLECTION = collection(db, "votes");
 
 const LOCAL_STORAGE_KEY = "downtown_vote";
-const IS_TEST = process.env.NEXT_PUBLIC_ENV === "test";
+export const IS_TEST = process.env.NEXT_PUBLIC_ENV === "test";
 
 export function getSavedVote(): number | null {
   if (IS_TEST) return null;
@@ -36,7 +36,10 @@ export async function submitVote(boundaryIndex: number): Promise<void> {
     if (!snap.exists()) {
       tx.set(TALLY_DOC, { counts: { [boundaryIndex]: 1 }, total: 1 });
     } else {
-      const data = snap.data() as { counts: Record<string, number>; total: number };
+      const data = snap.data() as {
+        counts: Record<string, number>;
+        total: number;
+      };
       tx.update(TALLY_DOC, {
         [`counts.${boundaryIndex}`]: (data.counts[boundaryIndex] ?? 0) + 1,
         total: data.total + 1,

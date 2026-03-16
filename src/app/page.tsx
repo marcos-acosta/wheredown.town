@@ -1,41 +1,68 @@
-'use client'
+"use client";
 
-import { useState, useEffect } from 'react'
-import dynamic from 'next/dynamic'
-import Intro from '@/components/Intro'
-import { submitVote, subscribeToTally, getSavedVote } from '@/lib/vote'
+import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
+import Intro from "@/components/Intro";
+import {
+  submitVote,
+  subscribeToTally,
+  getSavedVote,
+  IS_TEST,
+} from "@/lib/vote";
+import boundariesData from "@/data/boundaries";
 
-const MapView = dynamic(() => import('@/components/MapView'), { ssr: false })
+const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
 
-type Phase = 'intro' | 'map' | 'results'
+type Phase = "intro" | "map" | "results";
+
+interface RegionShare {
+  number: number;
+  percent: number;
+}
+
+// Returns N+1 entries where entry i represents the region between boundary[i-1] and boundary[i].
+// Entry 0 = south of the first boundary (always 100% downtown).
+// Entry N = north of the last boundary (always 0%).
+// A voter who picks boundary B considers all regions with index <= B to be downtown.
+function buildRegionShares(
+  counts: Record<string, number>,
+  total: number,
+): RegionShare[] {
+  const n = (boundariesData as GeoJSON.FeatureCollection).features.length;
+  // suffix sum: suffixVotes[i] = number of voters who picked boundary >= i
+  const suffixVotes = new Array<number>(n + 1).fill(0);
+  for (let i = n - 1; i >= 0; i--) {
+    suffixVotes[i] = (counts[i] ?? 0) + suffixVotes[i + 1];
+  }
+  return Array.from({ length: n + 1 }, (_, i) => ({
+    number: suffixVotes[i],
+    percent: total > 0 ? suffixVotes[i] / total : 0,
+  }));
+}
 
 export default function Home() {
-  const [phase, setPhase] = useState<Phase>('intro')
+  const [phase, setPhase] = useState<Phase>("intro");
 
   useEffect(() => {
-    if (getSavedVote() !== null) setPhase('results')
-  }, [])
+    if (getSavedVote() !== null) setPhase("results");
+  }, []);
 
   useEffect(() => {
-    if (phase !== 'results') return
+    if (phase !== "results") return;
     const unsubscribe = subscribeToTally((counts, total) => {
-      console.log('=== Downtown vote histogram ===')
-      console.log(`Total votes: ${total}`)
-      const sorted = Object.entries(counts).sort(
-        ([a], [b]) => Number(a) - Number(b),
-      )
-      for (const [index, count] of sorted) {
-        console.log(`  Boundary ${index}: ${count} votes (${((count / total) * 100).toFixed(1)}%)`)
+      const regions = buildRegionShares(counts, total);
+      if (IS_TEST) {
+        console.log(regions);
       }
-    })
-    return unsubscribe
-  }, [phase])
+    });
+    return unsubscribe;
+  }, [phase]);
 
   async function handleVote(boundaryIndex: number) {
-    setPhase('results')
-    await submitVote(boundaryIndex)
+    setPhase("results");
+    await submitVote(boundaryIndex);
   }
 
-  if (phase === 'intro') return <Intro onStart={() => setPhase('map')} />
-  return <MapView onVote={handleVote} voted={phase === 'results'} />
+  if (phase === "intro") return <Intro onStart={() => setPhase("map")} />;
+  return <MapView onVote={handleVote} voted={phase === "results"} />;
 }
