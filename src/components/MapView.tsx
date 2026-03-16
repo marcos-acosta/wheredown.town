@@ -12,11 +12,13 @@ const INITIAL_ZOOM = 13.5;
 const GLOW_COLOR = "#00ff88";
 const SNAP_DEBOUNCE_MS = 180;
 const SCROLL_SCALE = 0.2;
+const DOWNTOWN_LABEL_FONT_SIZE = 28;
 
 interface Boundary {
   name: string;
   coordinates: [number, number][];
   interpolatedLat: (lng: number) => number;
+  downtownFontScale?: number;
 }
 
 function parseBoundaries(): Boundary[] {
@@ -26,7 +28,9 @@ function parseBoundaries(): Boundary[] {
       number,
       number,
     ][];
-    const name = (feature.properties as { mainStreet: string }).mainStreet;
+    const props = feature.properties as { mainStreet: string; downtownFontScale?: number };
+    const name = props.mainStreet;
+    const downtownFontScale = props.downtownFontScale;
 
     function interpolatedLat(targetLng: number): number {
       if (targetLng <= coords[0][0]) return coords[0][1];
@@ -45,7 +49,7 @@ function parseBoundaries(): Boundary[] {
       return coords[coords.length - 1][1];
     }
 
-    return { name, coordinates: coords, interpolatedLat };
+    return { name, coordinates: coords, interpolatedLat, downtownFontScale };
   });
 }
 
@@ -329,6 +333,8 @@ export default function MapView() {
       const pt = map.project([midLng, midLat]);
       downtownLabelRef.current.style.left = pt.x + "px";
       downtownLabelRef.current.style.top = pt.y + "px";
+      const scale = boundary.downtownFontScale ?? 1;
+      downtownLabelRef.current.style.fontSize = scale * DOWNTOWN_LABEL_FONT_SIZE + "px";
     }
 
     function updateFill(boundary: Boundary) {
