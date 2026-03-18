@@ -39,9 +39,14 @@ function buildRegionShares(
 export default function Home() {
   const [phase, setPhase] = useState<Phase>("intro");
   const [regionShares, setRegionShares] = useState<RegionShare[]>([]);
+  const [userBoundaryIndex, setUserBoundaryIndex] = useState<number | null>(null);
 
   useEffect(() => {
-    if (getSavedVote() !== null) setPhase("results");
+    const saved = getSavedVote();
+    if (saved !== null) {
+      setUserBoundaryIndex(saved);
+      setPhase("results");
+    }
   }, []);
 
   useEffect(() => {
@@ -55,6 +60,7 @@ export default function Home() {
   }, [phase]);
 
   async function handleVote(boundaryIndex: number) {
+    setUserBoundaryIndex(boundaryIndex);
     setPhase("results");
     await submitVote(boundaryIndex);
   }
@@ -65,6 +71,7 @@ export default function Home() {
       onVote={handleVote}
       voted={phase === "results"}
       regionShares={regionShares}
+      userBoundaryIndex={userBoundaryIndex}
     />
   );
 }

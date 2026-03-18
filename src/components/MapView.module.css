@@ -60,6 +60,49 @@
     0 0 15px var(--glow-color);
 }
 
+.lineGraph {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  pointer-events: none;
+}
+
+.resultsHeader {
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  pointer-events: none;
+}
+
+.resultsLabel {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--glow-color);
+  text-shadow: var(--glow-shadow);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.resultsText {
+  font-size: 1rem;
+  color: #ccc;
+  margin-top: 6px;
+}
+
+@media (min-width: 768px) {
+  .resultsHeader {
+    left: auto;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: min(50vw, 480px);
+    text-align: center;
+  }
+}
+
 .downtownLabel {
   position: absolute;
   transform: translate(-50%, -50%) rotate(var(--rotation, 0deg));

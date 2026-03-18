@@ -4,21 +4,15 @@ import { useEffect, useRef } from "react";
 import mapboxgl, { GeoJSONSource } from "mapbox-gl";
 import boundariesData from "../data/boundaries";
 import { manhattanData, manhattanCenter } from "../data/manhattan";
-import regionsData from "../data/regions";
 import { RegionShare } from "../lib/types";
 import styles from "./MapView.module.css";
 
 const BEARING = 29;
 const INITIAL_CENTER: [number, number] = [-73.9927, 40.7356];
 const INITIAL_ZOOM = 13.5;
-const RESULTS_CENTER: [number, number] = [-73.9903, 40.7345];
-const RESULTS_ZOOM = 12.5;
-// Viewport width (px) at which the reference zooms exactly fit Manhattan's width.
-// Below this, zoom scales down proportionally so the full width stays visible.
+const RESULTS_CENTER: [number, number] = [-73.9703, 40.729];
+const RESULTS_ZOOM = 13;
 const ZOOM_BREAKPOINT_WIDTH = 1000;
-// How aggressively zoom responds to width changes below the breakpoint.
-// 1 = mathematically exact (halving width removes 1 zoom level).
-// < 1 = gentler falloff (allows slight overflow on small screens).
 const ZOOM_SCALE = 1;
 
 function getAdaptiveZoom(viewportWidth: number, referenceZoom: number): number {
@@ -32,7 +26,6 @@ function getAdaptiveZoom(viewportWidth: number, referenceZoom: number): number {
 const GLOW_COLOR = "#00ff88";
 const SNAP_DEBOUNCE_MS = 180;
 const SCROLL_SCALE = 0.2;
-const MAX_REGION_OPACITY = 0.55;
 
 interface Boundary {
   index: number;
@@ -93,7 +86,6 @@ function parseBoundaries(): Boundary[] {
 
 const BOUNDARIES = parseBoundaries();
 
-// Sorted south → north by lat at the initial center longitude
 const SORTED_BOUNDARIES = [...BOUNDARIES].sort(
   (a, b) =>
     a.interpolatedLat(INITIAL_CENTER[0]) - b.interpolatedLat(INITIAL_CENTER[0]),
@@ -269,16 +261,38 @@ function findClosestBoundary(map: mapboxgl.Map): Boundary {
   return closest;
 }
 
+// Precompute east coast intersection points for each boundary (geographic coords)
+const eastCoastPoints: ([number, number] | null)[] = SORTED_BOUNDARIES.map(
+  (b) => {
+    const east = findCoastIntersection(
+      b.coordinates[0],
+      b.coordinates[b.coordinates.length - 1],
+      COAST_TIP_INDEX,
+      MANHATTAN_COORDS.length - 1,
+    );
+    return east ? east.point : null;
+  },
+);
+
 interface MapViewProps {
   onVote: (boundaryIndex: number) => void;
   voted: boolean;
   regionShares: RegionShare[];
+  userBoundaryIndex: number | null;
 }
 
-export default function MapView({ onVote, voted, regionShares }: MapViewProps) {
+export default function MapView({
+  onVote,
+  voted,
+  regionShares,
+  userBoundaryIndex,
+}: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const labelRef = useRef<HTMLDivElement>(null);
   const downtownLabelRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const headerLabelRef = useRef<HTMLDivElement | null>(null);
+  const headerTextRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -287,32 +301,28 @@ export default function MapView({ onVote, voted, regionShares }: MapViewProps) {
   const activeBoundaryRef = useRef<Boundary>(BOUNDARIES[0]);
   const votedRef = useRef(voted);
   const regionSharesRef = useRef(regionShares);
-  // Stored inside main useEffect so it captures `map`; called by voted useEffect
+  const userBoundaryIndexRef = useRef(userBoundaryIndex);
   const enterResultsModeRef = useRef<(() => void) | null>(null);
   const updateAllRef = useRef<((b: Boundary) => void) | null>(null);
-  const hoverCleanupRef = useRef<(() => void) | null>(null);
+  const updateGraphRef = useRef<(() => void) | null>(null);
 
-  // Keep refs in sync with props
   useEffect(() => {
     votedRef.current = voted;
   }, [voted]);
 
   useEffect(() => {
     regionSharesRef.current = regionShares;
-  }, [regionShares]);
-
-  // Update Mapbox feature states when regionShares changes
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !voted || regionShares.length === 0 || !map.isStyleLoaded())
-      return;
-    regionShares.forEach((region, i) => {
-      map.setFeatureState(
-        { source: "regions", id: i },
-        { share: region.percent },
-      );
-    });
+    if (voted && updateGraphRef.current) {
+      updateGraphRef.current();
+    }
+    if (voted && activeBoundaryRef.current) {
+      updateHeaderTextExternal(activeBoundaryRef.current);
+    }
   }, [regionShares, voted]);
+
+  useEffect(() => {
+    userBoundaryIndexRef.current = userBoundaryIndex;
+  }, [userBoundaryIndex]);
 
   // Enter results mode when voted flips to true (map already loaded)
   useEffect(() => {
@@ -322,8 +332,20 @@ export default function MapView({ onVote, voted, regionShares }: MapViewProps) {
     if (map.isStyleLoaded() && enterResultsModeRef.current) {
       enterResultsModeRef.current();
     }
-    // If not yet loaded, map.on('load') will call it via votedRef check
   }, [voted]);
+
+  // updateHeaderText needs to be callable from the regionShares effect too
+  function updateHeaderTextExternal(boundary: Boundary) {
+    if (!headerTextRef.current) return;
+    const shares = regionSharesRef.current;
+    if (!shares.length) return;
+    const total = shares[0]?.number ?? 1;
+    const atOrAbove = shares[boundary.index]?.number ?? 0;
+    const pct = (total - atOrAbove) / total;
+    const shown = pct >= 0.5 ? pct : 1 - pct;
+    const direction = pct >= 0.5 ? "further south" : "further north";
+    headerTextRef.current.textContent = `${Math.round(shown * 100)}% of voters placed the boundary ${direction}`;
+  }
 
   // Main map setup — runs once
   useEffect(() => {
@@ -371,12 +393,19 @@ export default function MapView({ onVote, voted, regionShares }: MapViewProps) {
       return { x: pts[pts.length - 1].x, y: pts[pts.length - 1].y };
     }
 
+    function getEastScreenY(sortedIdx: number): number | null {
+      const coord = eastCoastPoints[sortedIdx];
+      return coord ? map.project(coord).y : null;
+    }
+
     function updateAll(boundary: Boundary) {
       activeBoundaryRef.current = boundary;
       updateGlowLine(boundary);
       updateFill(boundary);
-      updateLabel(boundary);
-      updateDowntownLabel(boundary);
+      if (!votedRef.current) {
+        updateLabel(boundary);
+        updateDowntownLabel(boundary);
+      }
     }
 
     function updateLabel(boundary: Boundary) {
@@ -480,113 +509,235 @@ export default function MapView({ onVote, voted, regionShares }: MapViewProps) {
 
     // --- Results mode ---
 
+    function getVotePct(sortedIdx: number): number {
+      const shares = regionSharesRef.current;
+      if (shares.length === 0) return 0;
+      const cur = shares[sortedIdx]?.number ?? 0;
+      const next = shares[sortedIdx + 1]?.number ?? 0;
+      const total = shares[0]?.number ?? 1;
+      return (cur - next) / total;
+    }
+
+    function getPercentile(boundaryIdx: number): number {
+      const shares = regionSharesRef.current;
+      if (!shares.length) return 0;
+      const total = shares[0]?.number ?? 1;
+      const atOrAbove = shares[boundaryIdx]?.number ?? 0;
+      return (total - atOrAbove) / total;
+    }
+
+    function getLabel(percentile: number): string {
+      if (percentile < 0.25) return "downtown elitist";
+      if (percentile <= 0.75) return "downtown neutral";
+      return "downtown anarchist";
+    }
+
+    function updateHeaderText(boundary: Boundary) {
+      if (!headerTextRef.current) return;
+      const shares = regionSharesRef.current;
+      if (!shares.length) return;
+      const pct = getPercentile(boundary.index);
+      const shown = pct >= 0.5 ? pct : 1 - pct;
+      const direction = pct >= 0.5 ? "further south" : "further north";
+      headerTextRef.current.textContent = `${Math.round(shown * 100)}% of voters placed the boundary ${direction}`;
+    }
+
+    function updateGraph() {
+      const svg = svgRef.current;
+      if (!svg) return;
+      const W = svg.clientWidth;
+      const activeIdx = activeBoundaryRef.current.index;
+
+      const rawPoints = SORTED_BOUNDARIES.map((_, i) => ({
+        x: getVotePct(i),
+        y: getEastScreenY(i) ?? -999,
+      })).filter((p) => p.y > 0 && p.y < window.innerHeight);
+
+      if (rawPoints.length === 0) {
+        svg.innerHTML = "";
+        return;
+      }
+
+      const maxX = Math.max(...rawPoints.map((p) => p.x), 0.001);
+      const points = rawPoints.map((p) => ({
+        x: (p.x / maxX) * W * 0.85,
+        y: p.y,
+      }));
+
+      const markerY = getEastScreenY(activeIdx) ?? 0;
+
+      const totalVotes = regionSharesRef.current[0]?.number ?? 1;
+      const votesAtOrBelow =
+        totalVotes - (regionSharesRef.current[activeIdx]?.number ?? 0);
+      const votesAbove = regionSharesRef.current[activeIdx]?.number ?? 0;
+      const shadeLargerHalf = votesAbove > votesAtOrBelow ? "above" : "below";
+
+      // Build polyline points string
+      const polyPts = points.map((p) => `${p.x},${p.y}`).join(" ");
+
+      // Build shaded polygon
+      let shadedPts: string;
+      if (shadeLargerHalf === "above") {
+        const abovePts = points.filter((p) => p.y <= markerY);
+        if (abovePts.length > 0) {
+          const topY = Math.min(...abovePts.map((p) => p.y));
+          shadedPts =
+            `0,${markerY} ` +
+            abovePts.map((p) => `${p.x},${p.y}`).join(" ") +
+            ` 0,${topY}`;
+        } else {
+          shadedPts = "";
+        }
+      } else {
+        const belowPts = points.filter((p) => p.y >= markerY);
+        if (belowPts.length > 0) {
+          const bottomY = Math.max(...belowPts.map((p) => p.y));
+          // Start at left edge at markerY, go DOWN to bottomY first, then trace
+          // the curve back up — avoids a crossing diagonal from 0,markerY to the
+          // first (bottommost) data point.
+          shadedPts =
+            `0,${markerY} 0,${bottomY} ` +
+            belowPts.map((p) => `${p.x},${p.y}`).join(" ");
+        } else {
+          shadedPts = "";
+        }
+      }
+
+      svg.innerHTML = `
+        ${
+          shadedPts
+            ? `<polygon points="${shadedPts}" fill="${GLOW_COLOR}" fill-opacity="0.15" />`
+            : ""
+        }
+        <polyline
+          points="${polyPts}"
+          fill="none"
+          stroke="${GLOW_COLOR}"
+          stroke-width="2"
+          stroke-opacity="0.8"
+        />
+        <line
+          x1="0" y1="${markerY}"
+          x2="${W}" y2="${markerY}"
+          stroke="${GLOW_COLOR}"
+          stroke-width="1.5"
+          stroke-opacity="0.6"
+          stroke-dasharray="4 4"
+        />
+      `;
+    }
+
+    function findClosestByY(screenY: number): Boundary {
+      let closest = SORTED_BOUNDARIES[0];
+      let minDist = Infinity;
+      SORTED_BOUNDARIES.forEach((b, i) => {
+        const y = getEastScreenY(i);
+        if (y === null) return;
+        const d = Math.abs(y - screenY);
+        if (d < minDist) {
+          minDist = d;
+          closest = b;
+        }
+      });
+      return closest;
+    }
+
     function enterResultsMode() {
-      // Hide voting UI
+      // Hide voting UI elements
+      if (labelRef.current) labelRef.current.style.display = "none";
       if (downtownLabelRef.current)
         downtownLabelRef.current.style.display = "none";
-      if (labelRef.current) labelRef.current.innerHTML = "";
 
-      // Clear voting layers
-      (map.getSource("active-boundary") as GeoJSONSource)?.setData({
-        type: "FeatureCollection",
-        features: [],
-      });
-      (map.getSource("southern-fill") as GeoJSONSource)?.setData({
-        type: "FeatureCollection",
-        features: [],
-      });
+      const graphWidth = Math.min(window.innerWidth * 0.5, 480);
 
-      // Zoom out to show all boundaries
+      // Resize SVG
+      if (svgRef.current) {
+        svgRef.current.style.width = graphWidth + "px";
+      }
+
+      // Pan map with padding so Manhattan fills left half
       map.easeTo({
         center: RESULTS_CENTER,
         zoom: getAdaptiveZoom(window.innerWidth, RESULTS_ZOOM),
         bearing: BEARING,
+        padding: { right: graphWidth, left: 0, top: 0, bottom: 0 },
         duration: 1000,
       });
 
-      // Apply any regionShares that arrived before results mode was entered
-      regionSharesRef.current.forEach((region, i) => {
-        map.setFeatureState(
-          { source: "regions", id: i },
-          { share: region.percent },
-        );
-      });
+      // Default to user's boundary
+      const defaultIdx = userBoundaryIndexRef.current ?? 0;
+      const defaultBoundary =
+        SORTED_BOUNDARIES[defaultIdx] ?? SORTED_BOUNDARIES[0];
+      updateAll(defaultBoundary);
 
-      // Hover: use queryRenderedFeatures (works without interactive: true)
+      // Set user label (fixed)
+      if (headerLabelRef.current) {
+        const userIdx = userBoundaryIndexRef.current ?? 0;
+        const userPct = getPercentile(userIdx);
+        headerLabelRef.current.textContent = getLabel(userPct);
+      }
+
+      updateHeaderText(defaultBoundary);
+
+      // Wait for map to settle then draw graph
+      setTimeout(() => {
+        updateGraph();
+        // Update label once map has moved
+        if (headerLabelRef.current && !regionSharesRef.current.length) {
+          headerLabelRef.current.textContent = getLabel(0.5);
+        }
+      }, 1100);
+
+      // Drag interaction
       const container = containerRef.current!;
-      let lastHoveredIndex: number | null = null;
+      let isDragging = false;
 
+      function onDragMove(screenY: number) {
+        const boundary = findClosestByY(screenY);
+        if (boundary === activeBoundaryRef.current) return;
+        updateAll(boundary);
+        updateGraph();
+        updateHeaderText(boundary);
+      }
+
+      function onMouseDown() {
+        isDragging = true;
+      }
+      function onMouseUp() {
+        isDragging = false;
+      }
       function onMouseMove(e: MouseEvent) {
-        const rect = container.getBoundingClientRect();
-        const pt = [e.clientX - rect.left, e.clientY - rect.top] as [
-          number,
-          number,
-        ];
-        const features = map.queryRenderedFeatures(pt, {
-          layers: ["regions-fill"],
-        });
-
-        if (!features.length) {
-          if (lastHoveredIndex !== null) clearHover();
-          return;
-        }
-
-        const idx = features[0].properties!.index as number;
-        if (idx === lastHoveredIndex) return;
-        lastHoveredIndex = idx;
-
-        // Dim all regions above hovered
-        const n = (regionsData as GeoJSON.FeatureCollection).features.length;
-        for (let i = 0; i < n; i++) {
-          map.setFeatureState(
-            { source: "regions", id: i },
-            { dimmed: i > idx },
-          );
-        }
-
-        // Position label above the boundary that forms the top of the hovered region
-        if (labelRef.current) {
-          const boundary = SORTED_BOUNDARIES[idx];
-          const { x, y } = getBoundaryScreenMidpoint(boundary);
-          const pct = regionSharesRef.current[idx]?.percent ?? 0;
-          if (pct === 0) {
-            labelRef.current.innerHTML = "";
-          } else {
-            labelRef.current.innerHTML = `${Math.round(pct * 100)}%<br><span class="${styles.labelSub}">consider ${boundary.name} downtown</span>`;
-            labelRef.current.style.left = x + "px";
-            labelRef.current.style.top = y - 110 + "px";
-          }
-        }
+        if (isDragging) onDragMove(e.clientY);
+      }
+      function onTouchStartResults(e: TouchEvent) {
+        onDragMove(e.touches[0].clientY);
+      }
+      function onTouchMoveResults(e: TouchEvent) {
+        e.preventDefault();
+        onDragMove(e.touches[0].clientY);
       }
 
-      function clearHover() {
-        lastHoveredIndex = null;
-        if (labelRef.current) labelRef.current.innerHTML = "";
-        const n = (regionsData as GeoJSON.FeatureCollection).features.length;
-        for (let i = 0; i < n; i++) {
-          map.setFeatureState({ source: "regions", id: i }, { dimmed: false });
-        }
-      }
-
-      container.addEventListener("mousemove", onMouseMove);
-      container.addEventListener("mouseleave", clearHover);
-      hoverCleanupRef.current = () => {
-        container.removeEventListener("mousemove", onMouseMove);
-        container.removeEventListener("mouseleave", clearHover);
-      };
+      container.addEventListener("mousedown", onMouseDown);
+      window.addEventListener("mouseup", onMouseUp);
+      window.addEventListener("mousemove", onMouseMove);
+      container.addEventListener("touchstart", onTouchStartResults, {
+        passive: true,
+      });
+      container.addEventListener("touchmove", onTouchMoveResults, {
+        passive: false,
+      });
     }
 
     enterResultsModeRef.current = enterResultsMode;
     updateAllRef.current = updateAll;
+    updateGraphRef.current = updateGraph;
 
     // --- Map load ---
 
     map.on("load", () => {
-      // Hide place/geo labels but keep road/street labels visible.
-      // IDs may vary by style version — check map.getStyle().layers in console if something looks off.
       const HIDDEN_LABEL_LAYERS = new Set([
-        "settlement-subdivision-label", // neighborhood names ("Tribeca", "Midtown")
-        "settlement-major-label", // city names ("Manhattan", "New York")
+        "settlement-subdivision-label",
+        "settlement-major-label",
         "settlement-minor-label",
         "state-label",
         "country-label",
@@ -641,30 +792,6 @@ export default function MapView({ onVote, voted, regionShares }: MapViewProps) {
         },
       });
 
-      // Results layer — always added; opacity driven by feature-state
-      map.addSource("regions", {
-        type: "geojson",
-        data: regionsData as GeoJSON.FeatureCollection,
-      });
-      map.addLayer({
-        id: "regions-fill",
-        type: "fill",
-        source: "regions",
-        paint: {
-          "fill-color": GLOW_COLOR,
-          "fill-opacity": [
-            "case",
-            ["boolean", ["feature-state", "dimmed"], false],
-            0,
-            [
-              "*",
-              MAX_REGION_OPACITY,
-              ["number", ["feature-state", "share"], 0],
-            ],
-          ],
-        },
-      });
-
       if (votedRef.current) {
         enterResultsMode();
       } else {
@@ -682,10 +809,22 @@ export default function MapView({ onVote, voted, regionShares }: MapViewProps) {
 
     function onResize() {
       map.resize();
-      const refZoom = votedRef.current ? RESULTS_ZOOM : INITIAL_ZOOM;
-      map.jumpTo({ zoom: getAdaptiveZoom(window.innerWidth, refZoom) });
-      if (!votedRef.current && updateAllRef.current) {
-        updateAllRef.current(activeBoundaryRef.current);
+      if (votedRef.current) {
+        const graphWidth = Math.min(window.innerWidth * 0.5, 480);
+        if (svgRef.current) {
+          svgRef.current.style.width = graphWidth + "px";
+        }
+        map.jumpTo({
+          zoom: getAdaptiveZoom(window.innerWidth, RESULTS_ZOOM),
+          padding: { right: graphWidth, left: 0, top: 0, bottom: 0 },
+        });
+        updateGraph();
+        updateAll(activeBoundaryRef.current);
+      } else {
+        map.jumpTo({ zoom: getAdaptiveZoom(window.innerWidth, INITIAL_ZOOM) });
+        if (updateAllRef.current) {
+          updateAllRef.current(activeBoundaryRef.current);
+        }
       }
     }
     window.addEventListener("resize", onResize);
@@ -694,7 +833,6 @@ export default function MapView({ onVote, voted, regionShares }: MapViewProps) {
       window.removeEventListener("resize", onResize);
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-      if (hoverCleanupRef.current) hoverCleanupRef.current();
       const container = containerRef.current;
       if (container) {
         container.removeEventListener("wheel", onWheel);
@@ -708,6 +846,7 @@ export default function MapView({ onVote, voted, regionShares }: MapViewProps) {
   return (
     <div className={styles.wrapper}>
       <div ref={containerRef} className={styles.map} />
+      <svg ref={svgRef} className={styles.lineGraph} />
       <div ref={labelRef} className={styles.label} />
       <div ref={downtownLabelRef} className={styles.downtownLabel}>
         DOWNTOWN
@@ -719,6 +858,12 @@ export default function MapView({ onVote, voted, regionShares }: MapViewProps) {
         >
           This is downtown
         </button>
+      )}
+      {voted && (
+        <div className={styles.resultsHeader}>
+          <div ref={headerLabelRef} className={styles.resultsLabel} />
+          <div ref={headerTextRef} className={styles.resultsText} />
+        </div>
       )}
     </div>
   );
