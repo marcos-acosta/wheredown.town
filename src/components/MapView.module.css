@@ -66,6 +66,7 @@
   right: 0;
   height: 100%;
   pointer-events: none;
+  overflow: visible;
 }
 
 .resultsHeader {
@@ -92,16 +93,6 @@
   margin-top: 6px;
 }
 
-@media (min-width: 768px) {
-  .resultsHeader {
-    left: auto;
-    right: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    width: min(50vw, 480px);
-    text-align: center;
-  }
-}
 
 .downtownLabel {
   position: absolute;

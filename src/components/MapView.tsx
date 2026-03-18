@@ -18,6 +18,19 @@ const ZOOM_BREAKPOINT_WIDTH = 1000;
 const RESULTS_ZOOM_BREAKPOINT_HEIGHT = 900;
 const ZOOM_SCALE = 1;
 
+// --- Results graph layout ---
+// Graph panel width: grows from GRAPH_SCREEN_FRACTION of the screen up to MAX_GRAPH_WIDTH,
+// then keeps growing once the left panel would exceed MAX_LEFT_PANEL_WIDTH.
+const GRAPH_SCREEN_FRACTION = 0.5; // fraction of screen width used by graph on small screens
+const MAX_GRAPH_WIDTH = 480; // graph width cap before left-panel cap kicks in
+const MAX_LEFT_PANEL_WIDTH = 400; // map area never exceeds this; graph grows beyond it
+// Fraction of graph width used by the bar chart line (leaves right margin).
+const GRAPH_BAR_FRACTION = 0.85;
+// Maximum bar length in px (the "height" of a bar in horizontal-bar-chart terms).
+const MAX_BAR_WIDTH = 300;
+// Minimum bar width in px so zero-vote items don't cause the curve to touch x=0.
+const GRAPH_MIN_BAR_PX = 2;
+
 function getAdaptiveZoom(
   viewportSize: number,
   breakpoint: number,
@@ -92,10 +105,8 @@ function parseBoundaries(): Boundary[] {
 
 const BOUNDARIES = parseBoundaries();
 
-const SORTED_BOUNDARIES = [...BOUNDARIES].sort(
-  (a, b) =>
-    a.interpolatedLat(INITIAL_CENTER[0]) - b.interpolatedLat(INITIAL_CENTER[0]),
-);
+// Sorted by index (south → north), matching the regionShares array ordering
+const SORTED_BOUNDARIES = [...BOUNDARIES].sort((a, b) => a.index - b.index);
 
 const MANHATTAN_COORDS = (
   manhattanData.features[0].geometry as GeoJSON.LineString
@@ -326,6 +337,8 @@ export default function MapView({
   const enterResultsModeRef = useRef<(() => void) | null>(null);
   const updateAllRef = useRef<((b: Boundary) => void) | null>(null);
   const updateGraphRef = useRef<(() => void) | null>(null);
+  const graphYsRef = useRef<number[]>([]);
+  const graphRevealedRef = useRef(false);
 
   useEffect(() => {
     votedRef.current = voted;
@@ -333,7 +346,7 @@ export default function MapView({
 
   useEffect(() => {
     regionSharesRef.current = regionShares;
-    if (voted && updateGraphRef.current) {
+    if (voted && graphRevealedRef.current && updateGraphRef.current) {
       updateGraphRef.current();
     }
     if (voted && activeBoundaryRef.current) {
@@ -418,9 +431,17 @@ export default function MapView({
       return { x: pts[pts.length - 1].x, y: pts[pts.length - 1].y };
     }
 
-    function getEastScreenY(sortedIdx: number): number | null {
+    function getEastScreenPos(
+      sortedIdx: number,
+    ): { x: number; y: number } | null {
       const coord = eastCoastPoints[sortedIdx];
-      return coord ? map.project(coord).y : null;
+      if (!coord) return null;
+      const pt = map.project(coord);
+      return { x: pt.x, y: pt.y };
+    }
+
+    function getEastScreenY(sortedIdx: number): number | null {
+      return getEastScreenPos(sortedIdx)?.y ?? null;
     }
 
     function updateAll(boundary: Boundary) {
@@ -571,25 +592,36 @@ export default function MapView({
       const svg = svgRef.current;
       if (!svg) return;
       const W = svg.clientWidth;
+      const n = SORTED_BOUNDARIES.length;
       const activeIdx = activeBoundaryRef.current.index;
 
-      const rawPoints = SORTED_BOUNDARIES.map((_, i) => ({
-        x: getVotePct(i),
-        y: getEastScreenY(i) ?? -999,
-      })).filter((p) => p.y > 0 && p.y < window.innerHeight);
+      // Anchor equidistant Y range to the actual east coast screen Ys of the
+      // southernmost and northernmost boundaries.
+      const bottomY = getEastScreenY(0) ?? window.innerHeight * 0.85;
+      const topY = getEastScreenY(n - 1) ?? window.innerHeight * 0.15;
 
-      if (rawPoints.length === 0) {
-        svg.innerHTML = "";
-        return;
-      }
+      // Equidistant graph Y positions: i=0 (south) → bottomY, i=n-1 (north) → topY
+      const graphYs = SORTED_BOUNDARIES.map(
+        (_, i) => bottomY + (topY - bottomY) * (i / (n - 1)),
+      );
+      graphYsRef.current = graphYs;
 
-      const maxX = Math.max(...rawPoints.map((p) => p.x), 0.001);
-      const points = rawPoints.map((p) => ({
-        x: (p.x / maxX) * W * 0.85,
-        y: p.y,
+      const xs = SORTED_BOUNDARIES.map((_, i) => getVotePct(i));
+      const maxX = Math.max(...xs, 0.001);
+      const points = SORTED_BOUNDARIES.map((_, i) => ({
+        x: Math.max(
+          GRAPH_MIN_BAR_PX,
+          Math.min((xs[i] / maxX) * W * GRAPH_BAR_FRACTION, MAX_BAR_WIDTH),
+        ),
+        y: graphYs[i],
       }));
 
-      const markerY = getEastScreenY(activeIdx) ?? 0;
+      const markerY = graphYs[activeIdx];
+      const eastPos = getEastScreenPos(activeIdx);
+      // Convert east coast screen X to SVG-local coordinates (may be negative)
+      const svgLeft = window.innerWidth - W;
+      const eastX = (eastPos?.x ?? svgLeft) - svgLeft;
+      const eastY = eastPos?.y ?? markerY;
 
       const totalVotes = regionSharesRef.current[0]?.number ?? 1;
       const votesAtOrBelow =
@@ -597,31 +629,26 @@ export default function MapView({
       const votesAbove = regionSharesRef.current[activeIdx]?.number ?? 0;
       const shadeLargerHalf = votesAbove > votesAtOrBelow ? "above" : "below";
 
-      // Build polyline points string
       const polyPts = points.map((p) => `${p.x},${p.y}`).join(" ");
 
-      // Build shaded polygon
       let shadedPts: string;
       if (shadeLargerHalf === "above") {
         const abovePts = points.filter((p) => p.y <= markerY);
         if (abovePts.length > 0) {
-          const topY = Math.min(...abovePts.map((p) => p.y));
+          const topPtY = Math.min(...abovePts.map((p) => p.y));
           shadedPts =
             `0,${markerY} ` +
             abovePts.map((p) => `${p.x},${p.y}`).join(" ") +
-            ` 0,${topY}`;
+            ` 0,${topPtY}`;
         } else {
           shadedPts = "";
         }
       } else {
         const belowPts = points.filter((p) => p.y >= markerY);
         if (belowPts.length > 0) {
-          const bottomY = Math.max(...belowPts.map((p) => p.y));
-          // Start at left edge at markerY, go DOWN to bottomY first, then trace
-          // the curve back up — avoids a crossing diagonal from 0,markerY to the
-          // first (bottommost) data point.
+          const bottomPtY = Math.max(...belowPts.map((p) => p.y));
           shadedPts =
-            `0,${markerY} 0,${bottomY} ` +
+            `0,${markerY} 0,${bottomPtY} ` +
             belowPts.map((p) => `${p.x},${p.y}`).join(" ");
         } else {
           shadedPts = "";
@@ -629,11 +656,7 @@ export default function MapView({
       }
 
       svg.innerHTML = `
-        ${
-          shadedPts
-            ? `<polygon points="${shadedPts}" fill="${GLOW_COLOR}" fill-opacity="0.15" />`
-            : ""
-        }
+        ${shadedPts ? `<polygon points="${shadedPts}" fill="${GLOW_COLOR}" fill-opacity="0.8" />` : ""}
         <polyline
           points="${polyPts}"
           fill="none"
@@ -641,9 +664,9 @@ export default function MapView({
           stroke-width="2"
           stroke-opacity="0.8"
         />
-        <line
-          x1="0" y1="${markerY}"
-          x2="${W}" y2="${markerY}"
+        <polyline
+          points="${eastX},${eastY} 0,${markerY} ${W},${markerY}"
+          fill="none"
           stroke="${GLOW_COLOR}"
           stroke-width="1.5"
           stroke-opacity="0.6"
@@ -653,11 +676,12 @@ export default function MapView({
     }
 
     function findClosestByY(screenY: number): Boundary {
+      const graphYs = graphYsRef.current;
       let closest = SORTED_BOUNDARIES[0];
       let minDist = Infinity;
       SORTED_BOUNDARIES.forEach((b, i) => {
-        const y = getEastScreenY(i);
-        if (y === null) return;
+        const y = graphYs[i] ?? getEastScreenY(i);
+        if (y === null || y === undefined) return;
         const d = Math.abs(y - screenY);
         if (d < minDist) {
           minDist = d;
@@ -677,7 +701,10 @@ export default function MapView({
       map.getStyle().layers.forEach((layer) => {
         if (layer.type === "symbol" && layer.id.startsWith("road")) {
           const existing = map.getFilter(layer.id);
-          const withinFilter: mapboxgl.Expression = ["within", MANHATTAN_POLYGON];
+          const withinFilter: mapboxgl.Expression = [
+            "within",
+            MANHATTAN_POLYGON,
+          ];
           map.setFilter(
             layer.id,
             existing ? ["all", existing, withinFilter] : withinFilter,
@@ -685,7 +712,10 @@ export default function MapView({
         }
       });
 
-      const graphWidth = Math.min(window.innerWidth * 0.5, 480);
+      const graphWidth = Math.max(
+        Math.min(window.innerWidth * GRAPH_SCREEN_FRACTION, MAX_GRAPH_WIDTH),
+        window.innerWidth - MAX_LEFT_PANEL_WIDTH,
+      );
 
       // Resize SVG
       if (svgRef.current) {
@@ -720,14 +750,13 @@ export default function MapView({
 
       updateHeaderText(defaultBoundary);
 
-      // Wait for map to settle then draw graph
       setTimeout(() => {
+        graphRevealedRef.current = true;
         updateGraph();
-        // Update label once map has moved
         if (headerLabelRef.current && !regionSharesRef.current.length) {
           headerLabelRef.current.textContent = getLabel(0.5);
         }
-      }, 1100);
+      }, 1000);
 
       // Drag interaction
       const container = containerRef.current!;
@@ -851,7 +880,10 @@ export default function MapView({
     function onResize() {
       map.resize();
       if (votedRef.current) {
-        const graphWidth = Math.min(window.innerWidth * 0.5, 480);
+        const graphWidth = Math.max(
+          Math.min(window.innerWidth * GRAPH_SCREEN_FRACTION, MAX_GRAPH_WIDTH),
+          window.innerWidth - MAX_LEFT_PANEL_WIDTH,
+        );
         if (svgRef.current) {
           svgRef.current.style.width = graphWidth + "px";
         }

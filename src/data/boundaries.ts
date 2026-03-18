@@ -199,7 +199,7 @@ const boundaries: GeoJSON.FeatureCollection = {
       type: "Feature",
       properties: {
         index: 8,
-        mainStreet: "Chambers St ",
+        mainStreet: "Chambers St",
         downtownFontScale: 0.9,
       },
       geometry: {
@@ -221,7 +221,7 @@ const boundaries: GeoJSON.FeatureCollection = {
       type: "Feature",
       properties: {
         index: 9,
-        mainStreet: "Duane St ",
+        mainStreet: "Duane St",
         downtownFontScale: 0.9,
       },
       geometry: {
