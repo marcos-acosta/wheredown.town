@@ -13,10 +13,25 @@ const INITIAL_CENTER: [number, number] = [-73.9927, 40.7356];
 const INITIAL_ZOOM = 13.5;
 const RESULTS_CENTER: [number, number] = [-73.9903, 40.7345];
 const RESULTS_ZOOM = 12.5;
+// Viewport width (px) at which the reference zooms exactly fit Manhattan's width.
+// Below this, zoom scales down proportionally so the full width stays visible.
+const ZOOM_BREAKPOINT_WIDTH = 1000;
+// How aggressively zoom responds to width changes below the breakpoint.
+// 1 = mathematically exact (halving width removes 1 zoom level).
+// < 1 = gentler falloff (allows slight overflow on small screens).
+const ZOOM_SCALE = 1;
+
+function getAdaptiveZoom(viewportWidth: number, referenceZoom: number): number {
+  return Math.min(
+    referenceZoom,
+    referenceZoom +
+      ZOOM_SCALE * Math.log2(viewportWidth / ZOOM_BREAKPOINT_WIDTH),
+  );
+}
+
 const GLOW_COLOR = "#00ff88";
 const SNAP_DEBOUNCE_MS = 180;
 const SCROLL_SCALE = 0.2;
-const DOWNTOWN_LABEL_FONT_SIZE = 28;
 const MAX_REGION_OPACITY = 0.55;
 
 interface Boundary {
@@ -274,6 +289,7 @@ export default function MapView({ onVote, voted, regionShares }: MapViewProps) {
   const regionSharesRef = useRef(regionShares);
   // Stored inside main useEffect so it captures `map`; called by voted useEffect
   const enterResultsModeRef = useRef<(() => void) | null>(null);
+  const updateAllRef = useRef<((b: Boundary) => void) | null>(null);
   const hoverCleanupRef = useRef<(() => void) | null>(null);
 
   // Keep refs in sync with props
@@ -317,7 +333,7 @@ export default function MapView({ onVote, voted, regionShares }: MapViewProps) {
       container: containerRef.current!,
       style: "mapbox://styles/mapbox/dark-v11",
       center: INITIAL_CENTER,
-      zoom: INITIAL_ZOOM,
+      zoom: getAdaptiveZoom(window.innerWidth, INITIAL_ZOOM),
       bearing: BEARING,
       interactive: false,
     });
@@ -392,10 +408,14 @@ export default function MapView({ onVote, voted, regionShares }: MapViewProps) {
       const pt = map.project([midLng, midLat]);
       downtownLabelRef.current.style.left = pt.x + "px";
       downtownLabelRef.current.style.top = pt.y + "px";
-      const scale = boundary.downtownFontScale ?? 1;
-      downtownLabelRef.current.style.fontSize =
-        scale * DOWNTOWN_LABEL_FONT_SIZE + "px";
-      downtownLabelRef.current.style.transform = `translate(-50%, -50%) rotate(${boundary.downtownRotation ?? 0}deg)`;
+      downtownLabelRef.current.style.setProperty(
+        "--boundary-scale",
+        String(boundary.downtownFontScale ?? 1),
+      );
+      downtownLabelRef.current.style.setProperty(
+        "--rotation",
+        `${boundary.downtownRotation ?? 0}deg`,
+      );
     }
 
     function updateFill(boundary: Boundary) {
@@ -479,7 +499,7 @@ export default function MapView({ onVote, voted, regionShares }: MapViewProps) {
       // Zoom out to show all boundaries
       map.easeTo({
         center: RESULTS_CENTER,
-        zoom: RESULTS_ZOOM,
+        zoom: getAdaptiveZoom(window.innerWidth, RESULTS_ZOOM),
         bearing: BEARING,
         duration: 1000,
       });
@@ -557,13 +577,28 @@ export default function MapView({ onVote, voted, regionShares }: MapViewProps) {
     }
 
     enterResultsModeRef.current = enterResultsMode;
+    updateAllRef.current = updateAll;
 
     // --- Map load ---
 
     map.on("load", () => {
-      // Hide all built-in symbol layers (street names, place labels, POIs, etc.)
+      // Hide place/geo labels but keep road/street labels visible.
+      // IDs may vary by style version — check map.getStyle().layers in console if something looks off.
+      const HIDDEN_LABEL_LAYERS = new Set([
+        "settlement-subdivision-label", // neighborhood names ("Tribeca", "Midtown")
+        "settlement-major-label", // city names ("Manhattan", "New York")
+        "settlement-minor-label",
+        "state-label",
+        "country-label",
+        "natural-point-label",
+        "natural-line-label",
+        "water-point-label",
+        "waterway-label",
+        "airport-label",
+        "poi-label",
+      ]);
       map.getStyle().layers.forEach((layer) => {
-        if (layer.type === "symbol") {
+        if (layer.type === "symbol" && HIDDEN_LABEL_LAYERS.has(layer.id)) {
           map.setLayoutProperty(layer.id, "visibility", "none");
         }
       });
@@ -645,7 +680,18 @@ export default function MapView({ onVote, voted, regionShares }: MapViewProps) {
       container.addEventListener("touchmove", onTouchMove, { passive: false });
     });
 
+    function onResize() {
+      map.resize();
+      const refZoom = votedRef.current ? RESULTS_ZOOM : INITIAL_ZOOM;
+      map.jumpTo({ zoom: getAdaptiveZoom(window.innerWidth, refZoom) });
+      if (!votedRef.current && updateAllRef.current) {
+        updateAllRef.current(activeBoundaryRef.current);
+      }
+    }
+    window.addEventListener("resize", onResize);
+
     return () => {
+      window.removeEventListener("resize", onResize);
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
       if (hoverCleanupRef.current) hoverCleanupRef.current();

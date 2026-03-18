@@ -22,7 +22,7 @@ export default function Intro({ onStart }: IntroProps) {
             Despite various definitions of Lower Manhattan, they generally
             include all of Manhattan Island south of 14th Street
           </div>
-          <div>&mdash; Also Wikipedia</div>
+          <div>&mdash; Wikipedia</div>
         </div>
         <div className={styles.quote}>
           <div className={styles.quoteText}>

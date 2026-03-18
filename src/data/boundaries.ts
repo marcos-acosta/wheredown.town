@@ -140,7 +140,7 @@ const boundaries: GeoJSON.FeatureCollection = {
       properties: {
         index: 5,
         mainStreet: "John St",
-        downtownFontScale: 0.9,
+        downtownFontScale: 0.8,
       },
       geometry: {
         type: "LineString",
@@ -160,6 +160,7 @@ const boundaries: GeoJSON.FeatureCollection = {
       properties: {
         index: 6,
         mainStreet: "Vesey St",
+        downtownFontScale: 0.8,
       },
       geometry: {
         type: "LineString",
@@ -179,6 +180,7 @@ const boundaries: GeoJSON.FeatureCollection = {
       properties: {
         index: 7,
         mainStreet: "Murray St",
+        downtownFontScale: 0.9,
       },
       geometry: {
         type: "LineString",
@@ -198,6 +200,7 @@ const boundaries: GeoJSON.FeatureCollection = {
       properties: {
         index: 8,
         mainStreet: "Chambers St ",
+        downtownFontScale: 0.9,
       },
       geometry: {
         type: "LineString",
@@ -219,6 +222,7 @@ const boundaries: GeoJSON.FeatureCollection = {
       properties: {
         index: 9,
         mainStreet: "Duane St ",
+        downtownFontScale: 0.9,
       },
       geometry: {
         type: "LineString",
@@ -248,6 +252,7 @@ const boundaries: GeoJSON.FeatureCollection = {
       properties: {
         index: 10,
         mainStreet: "Worth St",
+        downtownFontScale: 0.9,
       },
       geometry: {
         type: "LineString",

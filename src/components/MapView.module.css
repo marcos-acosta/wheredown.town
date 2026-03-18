@@ -50,6 +50,7 @@
   cursor: pointer;
   white-space: nowrap;
   transition: box-shadow 0.5s;
+  border-radius: 3px;
 }
 
 .voteButton:hover {
@@ -61,11 +62,13 @@
 
 .downtownLabel {
   position: absolute;
-  transform: translate(-50%, -50%); /* JS overrides this with rotation */
+  transform: translate(-50%, -50%) rotate(var(--rotation, 0deg));
   color: var(--glow-color);
-  opacity: 0.35;
+  opacity: 0.4;
   font-family: serif;
   font-weight: 700;
+  /* 2.8vw = 28px at the 1000px zoom breakpoint; capped above that */
+  font-size: calc(min(3.5vw, 28px) * var(--boundary-scale, 1));
   letter-spacing: 0.15em;
   pointer-events: none;
   white-space: nowrap;
