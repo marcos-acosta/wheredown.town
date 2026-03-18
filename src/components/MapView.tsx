@@ -10,16 +10,22 @@ import styles from "./MapView.module.css";
 const BEARING = 29;
 const INITIAL_CENTER: [number, number] = [-73.9927, 40.7356];
 const INITIAL_ZOOM = 13.5;
-const RESULTS_CENTER: [number, number] = [-73.9703, 40.729];
-const RESULTS_ZOOM = 13;
+const RESULTS_CENTER: [number, number] = [-73.9753, 40.732];
+const RESULTS_ZOOM = 12.25;
+// Voting mode: zoom scales with viewport width (Manhattan width fills screen)
 const ZOOM_BREAKPOINT_WIDTH = 1000;
+// Results mode: zoom scales with viewport height (Manhattan height fills left panel)
+const RESULTS_ZOOM_BREAKPOINT_HEIGHT = 900;
 const ZOOM_SCALE = 1;
 
-function getAdaptiveZoom(viewportWidth: number, referenceZoom: number): number {
+function getAdaptiveZoom(
+  viewportSize: number,
+  breakpoint: number,
+  referenceZoom: number,
+): number {
   return Math.min(
     referenceZoom,
-    referenceZoom +
-      ZOOM_SCALE * Math.log2(viewportWidth / ZOOM_BREAKPOINT_WIDTH),
+    referenceZoom + ZOOM_SCALE * Math.log2(viewportSize / breakpoint),
   );
 }
 
@@ -94,6 +100,21 @@ const SORTED_BOUNDARIES = [...BOUNDARIES].sort(
 const MANHATTAN_COORDS = (
   manhattanData.features[0].geometry as GeoJSON.LineString
 ).coordinates as [number, number][];
+
+// Closed polygon for use with Mapbox 'within' filter expressions
+const MANHATTAN_POLYGON: GeoJSON.Feature<GeoJSON.Polygon> = {
+  type: "Feature",
+  properties: {},
+  geometry: {
+    type: "Polygon",
+    coordinates: [
+      MANHATTAN_COORDS[0].toString() ===
+      MANHATTAN_COORDS[MANHATTAN_COORDS.length - 1].toString()
+        ? MANHATTAN_COORDS
+        : [...MANHATTAN_COORDS, MANHATTAN_COORDS[0]],
+    ],
+  },
+};
 
 const CENTER_COORDS = (
   manhattanCenter.features[0].geometry as GeoJSON.LineString
@@ -355,7 +376,11 @@ export default function MapView({
       container: containerRef.current!,
       style: "mapbox://styles/mapbox/dark-v11",
       center: INITIAL_CENTER,
-      zoom: getAdaptiveZoom(window.innerWidth, INITIAL_ZOOM),
+      zoom: getAdaptiveZoom(
+        window.innerWidth,
+        ZOOM_BREAKPOINT_WIDTH,
+        INITIAL_ZOOM,
+      ),
       bearing: BEARING,
       interactive: false,
     });
@@ -648,6 +673,18 @@ export default function MapView({
       if (downtownLabelRef.current)
         downtownLabelRef.current.style.display = "none";
 
+      // Restrict road labels to Manhattan only
+      map.getStyle().layers.forEach((layer) => {
+        if (layer.type === "symbol" && layer.id.startsWith("road")) {
+          const existing = map.getFilter(layer.id);
+          const withinFilter: mapboxgl.Expression = ["within", MANHATTAN_POLYGON];
+          map.setFilter(
+            layer.id,
+            existing ? ["all", existing, withinFilter] : withinFilter,
+          );
+        }
+      });
+
       const graphWidth = Math.min(window.innerWidth * 0.5, 480);
 
       // Resize SVG
@@ -658,7 +695,11 @@ export default function MapView({
       // Pan map with padding so Manhattan fills left half
       map.easeTo({
         center: RESULTS_CENTER,
-        zoom: getAdaptiveZoom(window.innerWidth, RESULTS_ZOOM),
+        zoom: getAdaptiveZoom(
+          window.innerHeight,
+          RESULTS_ZOOM_BREAKPOINT_HEIGHT,
+          RESULTS_ZOOM,
+        ),
         bearing: BEARING,
         padding: { right: graphWidth, left: 0, top: 0, bottom: 0 },
         duration: 1000,
@@ -815,13 +856,23 @@ export default function MapView({
           svgRef.current.style.width = graphWidth + "px";
         }
         map.jumpTo({
-          zoom: getAdaptiveZoom(window.innerWidth, RESULTS_ZOOM),
+          zoom: getAdaptiveZoom(
+            window.innerHeight,
+            RESULTS_ZOOM_BREAKPOINT_HEIGHT,
+            RESULTS_ZOOM,
+          ),
           padding: { right: graphWidth, left: 0, top: 0, bottom: 0 },
         });
         updateGraph();
         updateAll(activeBoundaryRef.current);
       } else {
-        map.jumpTo({ zoom: getAdaptiveZoom(window.innerWidth, INITIAL_ZOOM) });
+        map.jumpTo({
+          zoom: getAdaptiveZoom(
+            window.innerWidth,
+            ZOOM_BREAKPOINT_WIDTH,
+            INITIAL_ZOOM,
+          ),
+        });
         if (updateAllRef.current) {
           updateAllRef.current(activeBoundaryRef.current);
         }
