@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import Intro from "@/components/Intro";
 import {
   submitVote,
+  fetchTallyOnce,
   subscribeToTally,
   getSavedVote,
   IS_TEST,
@@ -61,8 +62,10 @@ export default function Home() {
 
   async function handleVote(boundaryIndex: number) {
     setUserBoundaryIndex(boundaryIndex);
-    setPhase("results");
     await submitVote(boundaryIndex);
+    const tally = await fetchTallyOnce();
+    if (tally) setRegionShares(buildRegionShares(tally.counts, tally.total));
+    setPhase("results");
   }
 
   if (phase === "intro") return <Intro onStart={() => setPhase("map")} />;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import mapboxgl, { GeoJSONSource } from "mapbox-gl";
 import boundariesData from "../data/boundaries";
 import { manhattanData, manhattanCenter } from "../data/manhattan";
@@ -324,7 +324,7 @@ function getLabel(percentile: number): string {
 }
 
 interface MapViewProps {
-  onVote: (boundaryIndex: number) => void;
+  onVote: (boundaryIndex: number) => Promise<void>;
   voted: boolean;
   regionShares: RegionShare[];
   userBoundaryIndex: number | null;
@@ -336,6 +336,9 @@ export default function MapView({
   regionShares,
   userBoundaryIndex,
 }: MapViewProps) {
+  const [voting, setVoting] = useState(false);
+  const [showLoading, setShowLoading] = useState(false);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const labelRef = useRef<HTMLDivElement>(null);
   const downtownLabelRef = useRef<HTMLDivElement>(null);
@@ -984,10 +987,17 @@ export default function MapView({
       </div>
       {!voted && (
         <button
-          className={styles.voteButton}
-          onClick={() => onVote(activeBoundaryRef.current.index)}
+          className={`${styles.voteButton}${voting ? ` ${styles.voteButtonVoting}` : ""}`}
+          onClick={() => {
+            if (voting) return;
+            setVoting(true);
+            const timer = setTimeout(() => setShowLoading(true), 1000);
+            onVote(activeBoundaryRef.current.index).finally(() =>
+              clearTimeout(timer),
+            );
+          }}
         >
-          This is downtown
+          {showLoading ? "Loading..." : "This is downtown"}
         </button>
       )}
       {voted && (

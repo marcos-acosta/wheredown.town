@@ -1,6 +1,7 @@
 import { db } from "./firebase";
 import {
   doc,
+  getDoc,
   runTransaction,
   onSnapshot,
   collection,
@@ -46,6 +47,15 @@ export async function submitVote(boundaryIndex: number): Promise<void> {
       });
     }
   });
+}
+
+export async function fetchTallyOnce(): Promise<{
+  counts: Record<string, number>;
+  total: number;
+} | null> {
+  const snap = await getDoc(TALLY_DOC);
+  if (!snap.exists()) return null;
+  return snap.data() as { counts: Record<string, number>; total: number };
 }
 
 export function subscribeToTally(
