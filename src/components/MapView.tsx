@@ -759,6 +759,8 @@ export default function MapView({
           });
         }
       }
+      if (resultsHeaderRef.current)
+        resultsHeaderRef.current.style.visibility = "visible";
       return { graphWidth, textWidth };
     }
 
