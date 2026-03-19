@@ -56,6 +56,7 @@ function getAdaptiveZoom(
 const GLOW_COLOR = "#00ff88";
 const SNAP_DEBOUNCE_MS = 180;
 const SCROLL_SCALE = 0.2;
+const RESULTS_SCROLL_SCALE = 0.4;
 
 interface Boundary {
   index: number;
@@ -908,6 +909,27 @@ export default function MapView({
       function onMouseMove(e: MouseEvent) {
         if (isDragging) onDragMove(e.clientY);
       }
+      let wheelPending = 0;
+      let wheelRaf: number | null = null;
+      function onWheelResults(e: WheelEvent) {
+        wheelPending += e.deltaY;
+        if (wheelRaf !== null) return;
+        wheelRaf = requestAnimationFrame(() => {
+          const step = wheelPending > 0 ? 1 : -1;
+          wheelPending = 0;
+          wheelRaf = null;
+          const currentIdx = activeBoundaryRef.current.index;
+          const nextIdx = Math.max(
+            0,
+            Math.min(SORTED_BOUNDARIES.length - 1, currentIdx + step),
+          );
+          const boundary = SORTED_BOUNDARIES[nextIdx];
+          if (boundary === activeBoundaryRef.current) return;
+          updateAll(boundary);
+          updateGraph();
+          showDraggingHeader(boundary);
+        });
+      }
       function onTouchStartResults(e: TouchEvent) {
         showDraggingHeader(activeBoundaryRef.current);
         onDragMove(e.touches[0].clientY);
@@ -920,6 +942,7 @@ export default function MapView({
       container.addEventListener("mousedown", onMouseDown);
       window.addEventListener("mouseup", onMouseUp);
       window.addEventListener("mousemove", onMouseMove);
+      container.addEventListener("wheel", onWheelResults, { passive: true });
       container.addEventListener("touchstart", onTouchStartResults, {
         passive: true,
       });
@@ -1096,7 +1119,7 @@ export default function MapView({
           </div>
           <div className={styles.resultsActions}>
             <span ref={restingActionsRef} className={styles.actionRow}>
-              <span className={styles.dragHint}>Drag to explore</span>
+              <span className={styles.dragHint}>Scroll to explore</span>
               <span> &mdash; </span>
               <button className={styles.shareButton} onClick={handleShare}>
                 {canShare ? "Share" : copied ? "Copied!" : "Copy"}
