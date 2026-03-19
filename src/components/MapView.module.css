@@ -113,9 +113,15 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: inherit;
+  font-size: 0.9rem;
   color: var(--muted);
   font-style: italic;
+}
+
+.actionRow {
+  display: flex;
+  flex-direction: row;
+  gap: 5px;
 }
 
 .shareButton {
@@ -130,9 +136,18 @@
   pointer-events: auto;
 }
 
+.resultsHeader a {
+  color: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.resultsHeader a:hover {
+  color: var(--light);
+}
+
 .shareButton:hover {
   color: var(--light);
-  border-color: var(--light);
 }
 
 .resultsText {
@@ -146,6 +161,10 @@
 
 .noWrap {
   white-space: nowrap;
+}
+
+.hidden {
+  display: none;
 }
 
 .downtownLabel {

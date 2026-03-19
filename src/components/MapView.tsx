@@ -23,7 +23,7 @@ const ZOOM_SCALE = 1;
 // Text fraction is 0 on narrow screens (no text column).
 const LAYOUT_BREAKPOINT = 1000; // px — threshold for wide (three-column) layout
 const NARROW_LAYOUT = { map: 0.55, graph: 0.45, text: 0 };
-const WIDE_LAYOUT = { map: 0.45, graph: 0.25, text: 0.3 };
+const WIDE_LAYOUT = { map: 0.4, graph: 0.25, text: 0.35 };
 
 function getResultsLayout(screenWidth: number) {
   const col = screenWidth >= LAYOUT_BREAKPOINT ? WIDE_LAYOUT : NARROW_LAYOUT;
@@ -366,7 +366,8 @@ export default function MapView({
   const svgRef = useRef<SVGSVGElement | null>(null);
   const resultsHeaderRef = useRef<HTMLDivElement | null>(null);
   const alignmentPrefixRef = useRef<HTMLDivElement | null>(null);
-  const dragHintRef = useRef<HTMLDivElement | null>(null);
+  const restingActionsRef = useRef<HTMLSpanElement | null>(null);
+  const showAlignmentRef = useRef<HTMLButtonElement | null>(null);
   const headerLabelRef = useRef<HTMLDivElement | null>(null);
   const headerTextPercentRef = useRef<HTMLSpanElement | null>(null);
   const headerTextRef = useRef<HTMLSpanElement | null>(null);
@@ -381,6 +382,7 @@ export default function MapView({
   const regionSharesRef = useRef(regionShares);
   const userBoundaryIndexRef = useRef(userBoundaryIndex);
   const enterResultsModeRef = useRef<(() => void) | null>(null);
+  const showRestingHeaderRef = useRef<(() => void) | null>(null);
   const updateAllRef = useRef<((b: Boundary) => void) | null>(null);
   const updateGraphRef = useRef<(() => void) | null>(null);
   const graphYsRef = useRef<number[]>([]);
@@ -867,7 +869,10 @@ export default function MapView({
         isDraggingResultsRef.current = true;
         if (alignmentPrefixRef.current)
           alignmentPrefixRef.current.style.display = "none";
-        if (dragHintRef.current) dragHintRef.current.style.display = "none";
+        if (restingActionsRef.current)
+          restingActionsRef.current.style.display = "none";
+        if (showAlignmentRef.current)
+          showAlignmentRef.current.style.display = "inline";
         if (headerLabelRef.current)
           headerLabelRef.current.classList.add(styles.resultsLabelDragging);
         const shares = regionSharesRef.current;
@@ -887,7 +892,10 @@ export default function MapView({
         isDraggingResultsRef.current = false;
         if (alignmentPrefixRef.current)
           alignmentPrefixRef.current.style.display = "";
-        if (dragHintRef.current) dragHintRef.current.style.display = "";
+        if (restingActionsRef.current)
+          restingActionsRef.current.style.display = "";
+        if (showAlignmentRef.current)
+          showAlignmentRef.current.style.display = "none";
         if (headerLabelRef.current)
           headerLabelRef.current.classList.remove(styles.resultsLabelDragging);
         const userBoundary =
@@ -898,6 +906,8 @@ export default function MapView({
         updateUserLabel();
         updateHeaderText(userBoundary);
       }
+
+      showRestingHeaderRef.current = showRestingHeader;
 
       // Drag interaction
       const container = containerRef.current!;
@@ -916,9 +926,7 @@ export default function MapView({
         showDraggingHeader(activeBoundaryRef.current);
       }
       function onMouseUp() {
-        if (!isDragging) return;
         isDragging = false;
-        showRestingHeader();
       }
       function onMouseMove(e: MouseEvent) {
         if (isDragging) onDragMove(e.clientY);
@@ -931,9 +939,6 @@ export default function MapView({
         e.preventDefault();
         onDragMove(e.touches[0].clientY);
       }
-      function onTouchEndResults() {
-        showRestingHeader();
-      }
 
       container.addEventListener("mousedown", onMouseDown);
       window.addEventListener("mouseup", onMouseUp);
@@ -943,9 +948,6 @@ export default function MapView({
       });
       container.addEventListener("touchmove", onTouchMoveResults, {
         passive: false,
-      });
-      container.addEventListener("touchend", onTouchEndResults, {
-        passive: true,
       });
     }
 
@@ -1114,11 +1116,26 @@ export default function MapView({
               className={`${styles.resultsTextHighlight} ${styles.noWrap}`}
             />
           </div>
-          <div ref={dragHintRef} className={styles.resultsActions}>
-            <span className={styles.dragHint}>Drag to explore</span>
-            <span>&mdash;</span>
-            <button className={styles.shareButton} onClick={handleShare}>
-              {canShare ? "Share" : copied ? "Copied!" : "Copy"}
+          <div className={styles.resultsActions}>
+            <span ref={restingActionsRef} className={styles.actionRow}>
+              <span className={styles.dragHint}>Drag to explore</span>
+              <span> &mdash; </span>
+              <button className={styles.shareButton} onClick={handleShare}>
+                {canShare ? "Share" : copied ? "Copied!" : "Copy"}
+              </button>
+              <span> &mdash; </span>
+              <span>
+                <a href="https://marcos.ac" target="_blank">
+                  About
+                </a>
+              </span>
+            </span>
+            <button
+              ref={showAlignmentRef}
+              className={`${styles.shareButton} ${styles.hidden}`}
+              onClick={() => showRestingHeaderRef.current?.()}
+            >
+              Show my alignment
             </button>
           </div>
         </div>
