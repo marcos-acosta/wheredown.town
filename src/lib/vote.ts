@@ -1,18 +1,23 @@
-import { db } from "./firebase";
+import { db, auth } from "./firebase";
 import {
   doc,
   getDoc,
+  setDoc,
   runTransaction,
   onSnapshot,
-  collection,
-  addDoc,
 } from "firebase/firestore";
+import { signInAnonymously } from "firebase/auth";
 
 const TALLY_DOC = doc(db, "meta", "tally");
-const VOTES_COLLECTION = collection(db, "votes");
 
 const LOCAL_STORAGE_KEY = "downtown_vote";
 export const IS_TEST = process.env.NEXT_PUBLIC_ENV === "test";
+
+async function ensureAuth(): Promise<string> {
+  if (auth.currentUser) return auth.currentUser.uid;
+  const { user } = await signInAnonymously(auth);
+  return user.uid;
+}
 
 export function getSavedVote(): number | null {
   if (IS_TEST) return null; // ignore saved vote in test mode so voting can be repeated
@@ -27,7 +32,10 @@ export function getSavedVote(): number | null {
 export async function submitVote(boundaryIndex: number): Promise<void> {
   localStorage.setItem(LOCAL_STORAGE_KEY, String(boundaryIndex));
 
-  await addDoc(VOTES_COLLECTION, {
+  const uid = await ensureAuth();
+
+  // setDoc with UID as document ID — Firestore rules enforce one create per UID
+  await setDoc(doc(db, "votes", uid), {
     boundaryIndex,
     timestamp: Date.now(),
   });
