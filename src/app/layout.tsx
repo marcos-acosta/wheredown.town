@@ -10,7 +10,21 @@ const literata = Literata({
 
 export const metadata: Metadata = {
   title: "wheredown.town",
-  description: "Where downtown?",
+  description: "Where is Downtown Manhattan?",
+  openGraph: {
+    title: "wheredown.town",
+    description: "Where is Downtown Manhattan?",
+    url: "https://wheredown.town",
+    siteName: "wheredown.town",
+    images: [
+      {
+        url: "https://wheredown.town/og-image.png",
+        width: 1200,
+        height: 630,
+      },
+    ],
+    type: "website",
+  },
 };
 
 export default function RootLayout({

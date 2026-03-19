@@ -423,9 +423,11 @@ export default function MapView({
     const userBoundary = SORTED_BOUNDARIES[userIdx] ?? SORTED_BOUNDARIES[0];
     const { shown, dirWord: dir } = getShownPct(shares, userIdx);
     const dirWord = dir === "below" ? "anarchist" : "purist";
-    const pct = (shares[0]?.number ?? 1) > 0
-      ? ((shares[0]?.number ?? 1) - (shares[userIdx]?.number ?? 0)) / (shares[0]?.number ?? 1)
-      : 0;
+    const pct =
+      (shares[0]?.number ?? 1) > 0
+        ? ((shares[0]?.number ?? 1) - (shares[userIdx]?.number ?? 0)) /
+          (shares[0]?.number ?? 1)
+        : 0;
     const label = getLabel(pct);
     const labelWithArticle = label.includes("neutral") ? label : `a ${label}`;
     return `I'm ${labelWithArticle}! I think Downtown Manhattan starts at ${userBoundary.name}, which is more ${dirWord} than ${Math.round(shown * 100)}% of respondents! https://wheredown.town`;
