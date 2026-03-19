@@ -10,7 +10,7 @@ import styles from "./MapView.module.css";
 const BEARING = 29;
 const INITIAL_CENTER: [number, number] = [-73.9927, 40.7356];
 const INITIAL_ZOOM = 13.5;
-const RESULTS_CENTER: [number, number] = [-73.9753, 40.732];
+const RESULTS_CENTER: [number, number] = [-73.9753, 40.734];
 const RESULTS_ZOOM = 12.25;
 // Voting mode: zoom scales with viewport width (Manhattan width fills screen)
 const ZOOM_BREAKPOINT_WIDTH = 1000;
@@ -23,7 +23,7 @@ const ZOOM_SCALE = 1;
 // Text fraction is 0 on narrow screens (no text column).
 const LAYOUT_BREAKPOINT = 700; // px — threshold for wide (three-column) layout
 const NARROW_LAYOUT = { map: 0.55, graph: 0.45, text: 0 };
-const WIDE_LAYOUT = { map: 0.4, graph: 0.3, text: 0.3 };
+const WIDE_LAYOUT = { map: 0.25, graph: 0.25, text: 0.5 };
 
 function getResultsLayout(screenWidth: number) {
   const col = screenWidth >= LAYOUT_BREAKPOINT ? WIDE_LAYOUT : NARROW_LAYOUT;
@@ -36,7 +36,7 @@ function getResultsLayout(screenWidth: number) {
 
 // --- Chart rendering ---
 // Fraction of graph panel width used by the bar chart line (leaves right margin).
-const GRAPH_BAR_FRACTION = 0.8;
+const GRAPH_BAR_FRACTION = 0.95;
 // Maximum bar length in px (the "height" of a bar in horizontal-bar-chart terms).
 const MAX_BAR_WIDTH = 300;
 // Minimum bar width in px so zero-vote items don't cause the curve to touch x=0.
@@ -317,6 +317,12 @@ const eastCoastPoints: ([number, number] | null)[] = SORTED_BOUNDARIES.map(
   },
 );
 
+function getLabel(percentile: number): string {
+  if (percentile < 0.25) return "downtown elitist";
+  if (percentile <= 0.75) return "downtown neutral";
+  return "downtown anarchist";
+}
+
 interface MapViewProps {
   onVote: (boundaryIndex: number) => void;
   voted: boolean;
@@ -336,7 +342,9 @@ export default function MapView({
   const svgRef = useRef<SVGSVGElement | null>(null);
   const resultsHeaderRef = useRef<HTMLDivElement | null>(null);
   const headerLabelRef = useRef<HTMLDivElement | null>(null);
-  const headerTextRef = useRef<HTMLDivElement | null>(null);
+  const headerTextPercentRef = useRef<HTMLSpanElement | null>(null);
+  const headerTextRef = useRef<HTMLSpanElement | null>(null);
+  const headerTextHighlightRef = useRef<HTMLSpanElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -363,6 +371,7 @@ export default function MapView({
     }
     if (voted && activeBoundaryRef.current) {
       updateHeaderTextExternal(activeBoundaryRef.current);
+      updateUserLabel();
     }
   }, [regionShares, voted]);
 
@@ -380,17 +389,34 @@ export default function MapView({
     }
   }, [voted]);
 
-  // updateHeaderText needs to be callable from the regionShares effect too
+  function updateUserLabel() {
+    if (!headerLabelRef.current) return;
+    const shares = regionSharesRef.current;
+    if (!shares.length) return;
+    const userIdx = userBoundaryIndexRef.current ?? 0;
+    const total = shares[0]?.number ?? 1;
+    const atOrAbove = shares[userIdx]?.number ?? 0;
+    const pct = (total - atOrAbove) / total;
+    headerLabelRef.current.textContent = getLabel(pct);
+  }
+
   function updateHeaderTextExternal(boundary: Boundary) {
-    if (!headerTextRef.current) return;
+    if (
+      !headerTextPercentRef.current ||
+      !headerTextRef.current ||
+      !headerTextHighlightRef.current
+    )
+      return;
     const shares = regionSharesRef.current;
     if (!shares.length) return;
     const total = shares[0]?.number ?? 1;
     const atOrAbove = shares[boundary.index]?.number ?? 0;
     const pct = (total - atOrAbove) / total;
     const shown = pct >= 0.5 ? pct : 1 - pct;
-    const direction = pct >= 0.5 ? "further south" : "further north";
-    headerTextRef.current.textContent = `${Math.round(shown * 100)}% of voters placed the boundary ${direction}`;
+    const dirWord = pct >= 0.5 ? "below" : "above";
+    headerTextPercentRef.current.textContent = `${Math.round(shown * 100)}%`;
+    headerTextRef.current.textContent = ` of voters placed the boundary `;
+    headerTextHighlightRef.current.textContent = `${dirWord} ${boundary.name}`;
   }
 
   // Main map setup — runs once
@@ -584,20 +610,21 @@ export default function MapView({
       return (total - atOrAbove) / total;
     }
 
-    function getLabel(percentile: number): string {
-      if (percentile < 0.25) return "downtown elitist";
-      if (percentile <= 0.75) return "downtown neutral";
-      return "downtown anarchist";
-    }
-
     function updateHeaderText(boundary: Boundary) {
-      if (!headerTextRef.current) return;
+      if (
+        !headerTextPercentRef.current ||
+        !headerTextRef.current ||
+        !headerTextHighlightRef.current
+      )
+        return;
       const shares = regionSharesRef.current;
       if (!shares.length) return;
       const pct = getPercentile(boundary.index);
       const shown = pct >= 0.5 ? pct : 1 - pct;
-      const direction = pct >= 0.5 ? "further south" : "further north";
-      headerTextRef.current.textContent = `${Math.round(shown * 100)}% of voters placed the boundary ${direction}`;
+      const dirWord = pct >= 0.5 ? "below" : "above";
+      headerTextPercentRef.current.textContent = `${Math.round(shown * 100)}%`;
+      headerTextRef.current.textContent = ` of voters placed the boundary `;
+      headerTextHighlightRef.current.textContent = `${dirWord} ${boundary.name}`;
     }
 
     function updateGraph() {
@@ -773,21 +800,11 @@ export default function MapView({
         SORTED_BOUNDARIES[defaultIdx] ?? SORTED_BOUNDARIES[0];
       updateAll(defaultBoundary);
 
-      // Set user label (fixed)
-      if (headerLabelRef.current) {
-        const userIdx = userBoundaryIndexRef.current ?? 0;
-        const userPct = getPercentile(userIdx);
-        headerLabelRef.current.textContent = getLabel(userPct);
-      }
-
       updateHeaderText(defaultBoundary);
 
       setTimeout(() => {
         graphRevealedRef.current = true;
         updateGraph();
-        if (headerLabelRef.current && !regionSharesRef.current.length) {
-          headerLabelRef.current.textContent = getLabel(0.5);
-        }
       }, 1000);
 
       // Drag interaction
@@ -975,8 +992,19 @@ export default function MapView({
       )}
       {voted && (
         <div ref={resultsHeaderRef} className={styles.resultsHeader}>
+          <div>Your alignment is</div>
           <div ref={headerLabelRef} className={styles.resultsLabel} />
-          <div ref={headerTextRef} className={styles.resultsText} />
+          <div className={styles.resultsText}>
+            <span
+              ref={headerTextPercentRef}
+              className={styles.resultsTextHighlight}
+            />
+            <span ref={headerTextRef} />
+            <span
+              ref={headerTextHighlightRef}
+              className={`${styles.resultsTextHighlight} ${styles.noWrap}`}
+            />
+          </div>
         </div>
       )}
     </div>

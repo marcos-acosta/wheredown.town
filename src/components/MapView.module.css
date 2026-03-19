@@ -76,9 +76,14 @@
   transform: translateX(-50%);
   text-align: center;
   pointer-events: none;
-  white-space: nowrap;
+  padding: 0 20px;
+  box-sizing: border-box;
+  color: var(--light);
+  display: flex;
+  gap: 5px;
+  flex-direction: column;
+  font-size: 1.1rem;
 }
-
 
 .resultsLabel {
   font-size: 2rem;
@@ -90,9 +95,16 @@
 }
 
 .resultsText {
-  font-size: 1rem;
-  color: #ccc;
-  margin-top: 6px;
+  color: var(--light);
+}
+
+.resultsTextHighlight {
+  color: var(--glow-color);
+  text-shadow: var(--glow-shadow);
+}
+
+.noWrap {
+  white-space: nowrap;
 }
 
 .downtownLabel {

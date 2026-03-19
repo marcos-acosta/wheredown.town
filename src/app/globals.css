@@ -3,8 +3,8 @@
 :root {
   --glow-color: #00ff88;
   --glow-shadow: 0 0 1px #00ff88, 0 0 5px #00ff88, 0 0 10px #00ff8878;
-  --dark: rgb(21, 21, 21);
-  --light: white;
+  --dark: rgb(23, 23, 23);
+  --light: rgb(216, 216, 216);
 }
 
 * {
