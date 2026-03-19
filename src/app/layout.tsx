@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   title: "wheredown.town",
   description: "Where is Downtown Manhattan?",
   openGraph: {
-    title: "wheredown.town",
+    title: "Where is Downtown Manhattan?",
     description: "Where is Downtown Manhattan?",
     url: "https://wheredown.town",
     siteName: "wheredown.town",
