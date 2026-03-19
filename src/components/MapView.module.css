@@ -89,7 +89,7 @@
   box-sizing: border-box;
   color: var(--light);
   display: flex;
-  gap: 5px;
+  gap: 10px;
   flex-direction: column;
   font-size: 1.1rem;
   visibility: hidden;
@@ -102,6 +102,38 @@
   text-shadow: var(--glow-shadow);
   text-transform: uppercase;
   letter-spacing: 0.1em;
+}
+
+.resultsLabelDragging {
+  font-size: 3.5rem;
+}
+
+.resultsActions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 10px;
+  font-size: inherit;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.shareButton {
+  color: inherit;
+  font-size: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-style: inherit;
+  text-decoration: underline;
+  pointer-events: auto;
+}
+
+.shareButton:hover {
+  color: var(--light);
+  border-color: var(--light);
 }
 
 .resultsText {

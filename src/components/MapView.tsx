@@ -11,7 +11,7 @@ const BEARING = 29;
 const INITIAL_CENTER: [number, number] = [-73.9927, 40.7356];
 const INITIAL_ZOOM = 13.5;
 const RESULTS_CENTER: [number, number] = [-73.9753, 40.734];
-const RESULTS_ZOOM = 12.25;
+const RESULTS_ZOOM = 12.2;
 // Voting mode: zoom scales with viewport width (Manhattan width fills screen)
 const ZOOM_BREAKPOINT_WIDTH = 1000;
 // Results mode: zoom scales with viewport height (Manhattan height fills left panel)
@@ -21,9 +21,9 @@ const ZOOM_SCALE = 1;
 // --- Results page layout ---
 // Column fractions for the three sections: map | graph | text.
 // Text fraction is 0 on narrow screens (no text column).
-const LAYOUT_BREAKPOINT = 700; // px — threshold for wide (three-column) layout
+const LAYOUT_BREAKPOINT = 1000; // px — threshold for wide (three-column) layout
 const NARROW_LAYOUT = { map: 0.55, graph: 0.45, text: 0 };
-const WIDE_LAYOUT = { map: 0.25, graph: 0.25, text: 0.5 };
+const WIDE_LAYOUT = { map: 0.45, graph: 0.25, text: 0.3 };
 
 function getResultsLayout(screenWidth: number) {
   const col = screenWidth >= LAYOUT_BREAKPOINT ? WIDE_LAYOUT : NARROW_LAYOUT;
@@ -36,7 +36,7 @@ function getResultsLayout(screenWidth: number) {
 
 // --- Chart rendering ---
 // Fraction of graph panel width used by the bar chart line (leaves right margin).
-const GRAPH_BAR_FRACTION = 0.95;
+const GRAPH_BAR_FRACTION = 0.9;
 // Maximum bar length in px (the "height" of a bar in horizontal-bar-chart terms).
 const MAX_BAR_WIDTH = 300;
 // Minimum bar width in px so zero-vote items don't cause the curve to touch x=0.
@@ -318,8 +318,12 @@ const eastCoastPoints: ([number, number] | null)[] = SORTED_BOUNDARIES.map(
 );
 
 function getLabel(percentile: number): string {
-  if (percentile < 0.25) return "downtown elitist";
-  if (percentile <= 0.75) return "downtown neutral";
+  if (percentile < 0.1) return "downtown gatekeeper";
+  if (percentile <= 0.25) return "downtown elitist";
+  if (percentile <= 0.35) return "downtown purist";
+  if (percentile <= 0.65) return "downtown neutral";
+  if (percentile <= 0.75) return "downtown generalist";
+  if (percentile <= 0.9) return "downtown populist";
   return "downtown anarchist";
 }
 
@@ -338,12 +342,16 @@ export default function MapView({
 }: MapViewProps) {
   const [voting, setVoting] = useState(false);
   const [showLoading, setShowLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const canShare = typeof navigator !== "undefined" && !!navigator.share;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const labelRef = useRef<HTMLDivElement>(null);
   const downtownLabelRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const resultsHeaderRef = useRef<HTMLDivElement | null>(null);
+  const alignmentPrefixRef = useRef<HTMLDivElement | null>(null);
+  const dragHintRef = useRef<HTMLDivElement | null>(null);
   const headerLabelRef = useRef<HTMLDivElement | null>(null);
   const headerTextPercentRef = useRef<HTMLSpanElement | null>(null);
   const headerTextRef = useRef<HTMLSpanElement | null>(null);
@@ -362,6 +370,7 @@ export default function MapView({
   const updateGraphRef = useRef<(() => void) | null>(null);
   const graphYsRef = useRef<number[]>([]);
   const graphRevealedRef = useRef(false);
+  const isDraggingResultsRef = useRef(false);
 
   useEffect(() => {
     votedRef.current = voted;
@@ -392,7 +401,35 @@ export default function MapView({
     }
   }, [voted]);
 
+  function buildShareText(): string {
+    const shares = regionSharesRef.current;
+    if (!shares.length) return "https://wheredown.town";
+    const userIdx = userBoundaryIndexRef.current ?? 0;
+    const userBoundary = SORTED_BOUNDARIES[userIdx] ?? SORTED_BOUNDARIES[0];
+    const total = shares[0]?.number ?? 1;
+    const atOrAbove = shares[userIdx]?.number ?? 0;
+    const pct = (total - atOrAbove) / total;
+    const isAnarchist = pct >= 0.5;
+    const shown = isAnarchist ? pct : 1 - pct;
+    const dirWord = isAnarchist ? "anarchist" : "purist";
+    const label = getLabel(pct);
+    const labelWithArticle = label.includes("neutral") ? label : `a ${label}`;
+    return `I'm ${labelWithArticle}! I think Downtown Manhattan starts at ${userBoundary.name}, which is more ${dirWord} than ${Math.round(shown * 100)}% of respondents! https://wheredown.town`;
+  }
+
+  async function handleShare() {
+    const text = buildShareText();
+    if (navigator.share) {
+      await navigator.share({ text });
+    } else {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }
+
   function updateUserLabel() {
+    if (isDraggingResultsRef.current) return;
     if (!headerLabelRef.current) return;
     const shares = regionSharesRef.current;
     if (!shares.length) return;
@@ -404,6 +441,7 @@ export default function MapView({
   }
 
   function updateHeaderTextExternal(boundary: Boundary) {
+    if (isDraggingResultsRef.current) return;
     if (
       !headerTextPercentRef.current ||
       !headerTextRef.current ||
@@ -418,7 +456,7 @@ export default function MapView({
     const shown = pct >= 0.5 ? pct : 1 - pct;
     const dirWord = pct >= 0.5 ? "below" : "above";
     headerTextPercentRef.current.textContent = `${Math.round(shown * 100)}%`;
-    headerTextRef.current.textContent = ` of voters placed the boundary `;
+    headerTextRef.current.textContent = ` of respondents placed the boundary `;
     headerTextHighlightRef.current.textContent = `${dirWord} ${boundary.name}`;
   }
 
@@ -626,7 +664,7 @@ export default function MapView({
       const shown = pct >= 0.5 ? pct : 1 - pct;
       const dirWord = pct >= 0.5 ? "below" : "above";
       headerTextPercentRef.current.textContent = `${Math.round(shown * 100)}%`;
-      headerTextRef.current.textContent = ` of voters placed the boundary `;
+      headerTextRef.current.textContent = ` of respondents placed the boundary `;
       headerTextHighlightRef.current.textContent = `${dirWord} ${boundary.name}`;
     }
 
@@ -812,6 +850,48 @@ export default function MapView({
         updateGraph();
       }, 1000);
 
+      // --- Header display modes ---
+
+      function showDraggingHeader(boundary: Boundary) {
+        isDraggingResultsRef.current = true;
+        if (alignmentPrefixRef.current)
+          alignmentPrefixRef.current.style.display = "none";
+        if (dragHintRef.current) dragHintRef.current.style.display = "none";
+        if (headerLabelRef.current)
+          headerLabelRef.current.classList.add(styles.resultsLabelDragging);
+        const shares = regionSharesRef.current;
+        const total = shares[0]?.number ?? 1;
+        const atOrAbove = shares[boundary.index]?.number ?? 0;
+        const pct = (total - atOrAbove) / total;
+        const shown = pct >= 0.5 ? pct : 1 - pct;
+        const dirWord = pct >= 0.5 ? "below" : "above";
+        if (headerLabelRef.current)
+          headerLabelRef.current.textContent = `${Math.round(shown * 100)}%`;
+        if (headerTextPercentRef.current)
+          headerTextPercentRef.current.textContent = "";
+        if (headerTextRef.current)
+          headerTextRef.current.textContent =
+            "of respondents placed the boundary ";
+        if (headerTextHighlightRef.current)
+          headerTextHighlightRef.current.textContent = `${dirWord} ${boundary.name}`;
+      }
+
+      function showRestingHeader() {
+        isDraggingResultsRef.current = false;
+        if (alignmentPrefixRef.current)
+          alignmentPrefixRef.current.style.display = "";
+        if (dragHintRef.current) dragHintRef.current.style.display = "";
+        if (headerLabelRef.current)
+          headerLabelRef.current.classList.remove(styles.resultsLabelDragging);
+        const userBoundary =
+          SORTED_BOUNDARIES[userBoundaryIndexRef.current ?? 0] ??
+          SORTED_BOUNDARIES[0];
+        updateAll(userBoundary);
+        updateGraph();
+        updateUserLabel();
+        updateHeaderText(userBoundary);
+      }
+
       // Drag interaction
       const container = containerRef.current!;
       let isDragging = false;
@@ -821,24 +901,31 @@ export default function MapView({
         if (boundary === activeBoundaryRef.current) return;
         updateAll(boundary);
         updateGraph();
-        updateHeaderText(boundary);
+        showDraggingHeader(boundary);
       }
 
       function onMouseDown() {
         isDragging = true;
+        showDraggingHeader(activeBoundaryRef.current);
       }
       function onMouseUp() {
+        if (!isDragging) return;
         isDragging = false;
+        showRestingHeader();
       }
       function onMouseMove(e: MouseEvent) {
         if (isDragging) onDragMove(e.clientY);
       }
       function onTouchStartResults(e: TouchEvent) {
+        showDraggingHeader(activeBoundaryRef.current);
         onDragMove(e.touches[0].clientY);
       }
       function onTouchMoveResults(e: TouchEvent) {
         e.preventDefault();
         onDragMove(e.touches[0].clientY);
+      }
+      function onTouchEndResults() {
+        showRestingHeader();
       }
 
       container.addEventListener("mousedown", onMouseDown);
@@ -849,6 +936,9 @@ export default function MapView({
       });
       container.addEventListener("touchmove", onTouchMoveResults, {
         passive: false,
+      });
+      container.addEventListener("touchend", onTouchEndResults, {
+        passive: true,
       });
     }
 
@@ -1004,7 +1094,7 @@ export default function MapView({
       )}
       {voted && (
         <div ref={resultsHeaderRef} className={styles.resultsHeader}>
-          <div>Your alignment is</div>
+          <div ref={alignmentPrefixRef}>Your alignment is</div>
           <div ref={headerLabelRef} className={styles.resultsLabel} />
           <div className={styles.resultsText}>
             <span
@@ -1016,6 +1106,13 @@ export default function MapView({
               ref={headerTextHighlightRef}
               className={`${styles.resultsTextHighlight} ${styles.noWrap}`}
             />
+          </div>
+          <div ref={dragHintRef} className={styles.resultsActions}>
+            <span className={styles.dragHint}>Drag to explore</span>
+            <span>&mdash;</span>
+            <button className={styles.shareButton} onClick={handleShare}>
+              {canShare ? "Share" : copied ? "Copied!" : "Copy"}
+            </button>
           </div>
         </div>
       )}
