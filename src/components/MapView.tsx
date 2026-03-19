@@ -317,6 +317,21 @@ const eastCoastPoints: ([number, number] | null)[] = SORTED_BOUNDARIES.map(
   },
 );
 
+// Returns { shown, dirWord } using strictly-above and strictly-below counts,
+// so voters who chose the boundary exactly don't inflate either side.
+function getShownPct(
+  shares: RegionShare[],
+  idx: number,
+): { shown: number; dirWord: "above" | "below" } {
+  const total = shares[0]?.number ?? 1;
+  const strictlyBelow = (total - (shares[idx]?.number ?? 0)) / total;
+  const strictlyAbove = (shares[idx + 1]?.number ?? 0) / total;
+  if (strictlyBelow >= strictlyAbove) {
+    return { shown: strictlyBelow, dirWord: "below" };
+  }
+  return { shown: strictlyAbove, dirWord: "above" };
+}
+
 function getLabel(percentile: number): string {
   if (percentile < 0.1) return "downtown gatekeeper";
   if (percentile <= 0.25) return "downtown elitist";
@@ -406,12 +421,11 @@ export default function MapView({
     if (!shares.length) return "https://wheredown.town";
     const userIdx = userBoundaryIndexRef.current ?? 0;
     const userBoundary = SORTED_BOUNDARIES[userIdx] ?? SORTED_BOUNDARIES[0];
-    const total = shares[0]?.number ?? 1;
-    const atOrAbove = shares[userIdx]?.number ?? 0;
-    const pct = (total - atOrAbove) / total;
-    const isAnarchist = pct >= 0.5;
-    const shown = isAnarchist ? pct : 1 - pct;
-    const dirWord = isAnarchist ? "anarchist" : "purist";
+    const { shown, dirWord: dir } = getShownPct(shares, userIdx);
+    const dirWord = dir === "below" ? "anarchist" : "purist";
+    const pct = (shares[0]?.number ?? 1) > 0
+      ? ((shares[0]?.number ?? 1) - (shares[userIdx]?.number ?? 0)) / (shares[0]?.number ?? 1)
+      : 0;
     const label = getLabel(pct);
     const labelWithArticle = label.includes("neutral") ? label : `a ${label}`;
     return `I'm ${labelWithArticle}! I think Downtown Manhattan starts at ${userBoundary.name}, which is more ${dirWord} than ${Math.round(shown * 100)}% of respondents! https://wheredown.town`;
@@ -451,10 +465,7 @@ export default function MapView({
     const shares = regionSharesRef.current;
     if (!shares.length) return;
     const total = shares[0]?.number ?? 1;
-    const atOrAbove = shares[boundary.index]?.number ?? 0;
-    const pct = (total - atOrAbove) / total;
-    const shown = pct >= 0.5 ? pct : 1 - pct;
-    const dirWord = pct >= 0.5 ? "below" : "above";
+    const { shown, dirWord } = getShownPct(shares, boundary.index);
     headerTextPercentRef.current.textContent = `${Math.round(shown * 100)}%`;
     headerTextRef.current.textContent = ` of respondents placed the boundary `;
     headerTextHighlightRef.current.textContent = `${dirWord} ${boundary.name}`;
@@ -660,9 +671,7 @@ export default function MapView({
         return;
       const shares = regionSharesRef.current;
       if (!shares.length) return;
-      const pct = getPercentile(boundary.index);
-      const shown = pct >= 0.5 ? pct : 1 - pct;
-      const dirWord = pct >= 0.5 ? "below" : "above";
+      const { shown, dirWord } = getShownPct(shares, boundary.index);
       headerTextPercentRef.current.textContent = `${Math.round(shown * 100)}%`;
       headerTextRef.current.textContent = ` of respondents placed the boundary `;
       headerTextHighlightRef.current.textContent = `${dirWord} ${boundary.name}`;
@@ -860,11 +869,7 @@ export default function MapView({
         if (headerLabelRef.current)
           headerLabelRef.current.classList.add(styles.resultsLabelDragging);
         const shares = regionSharesRef.current;
-        const total = shares[0]?.number ?? 1;
-        const atOrAbove = shares[boundary.index]?.number ?? 0;
-        const pct = (total - atOrAbove) / total;
-        const shown = pct >= 0.5 ? pct : 1 - pct;
-        const dirWord = pct >= 0.5 ? "below" : "above";
+        const { shown, dirWord } = getShownPct(shares, boundary.index);
         if (headerLabelRef.current)
           headerLabelRef.current.textContent = `${Math.round(shown * 100)}%`;
         if (headerTextPercentRef.current)
