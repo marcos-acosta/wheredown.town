@@ -11,7 +11,7 @@ const BEARING = 29;
 const INITIAL_CENTER: [number, number] = [-73.9927, 40.7356];
 const INITIAL_ZOOM = 13.5;
 const RESULTS_CENTER: [number, number] = [-73.9753, 40.734];
-const RESULTS_ZOOM = 12.2;
+const RESULTS_ZOOM = 12;
 // Voting mode: zoom scales with viewport width (Manhattan width fills screen)
 const ZOOM_BREAKPOINT_WIDTH = 1000;
 // Results mode: zoom scales with viewport height (Manhattan height fills left panel)

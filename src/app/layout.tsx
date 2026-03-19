@@ -10,7 +10,6 @@ const literata = Literata({
 export const metadata: Metadata = {
   title: "wheredown.town",
   description: "Where downtown?",
-  themeColor: "#1f1f1f",
 };
 
 export default function RootLayout({
@@ -22,6 +21,7 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <meta name="apple-mobile-web-app-title" content="downtown" />
+        <meta name="theme-color" content="#1f1f1f" />
       </head>
       <body className={literata.variable}>
         {children}
