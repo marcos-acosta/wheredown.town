@@ -22,3 +22,9 @@ body {
   background: #000;
   font-size: 16px;
 }
+
+@media (max-width: 600px) {
+  html {
+    font-size: 14px;
+  }
+}
