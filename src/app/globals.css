@@ -20,11 +20,11 @@ body {
   height: 100%;
   overflow: hidden;
   background: var(--dark);
-  font-size: 14px;
+  font-size: 15px;
   font-family: var(--font-literata), serif;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 500px) {
   html {
     font-size: 12px;
   }

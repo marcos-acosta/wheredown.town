@@ -423,16 +423,12 @@ export default function MapView({
     if (!shares.length) return "https://wheredown.town";
     const userIdx = userBoundaryIndexRef.current ?? 0;
     const userBoundary = SORTED_BOUNDARIES[userIdx] ?? SORTED_BOUNDARIES[0];
-    const { shown, dirWord: dir } = getShownPct(shares, userIdx);
-    const dirWord = dir === "below" ? "anarchist" : "purist";
-    const pct =
-      (shares[0]?.number ?? 1) > 0
-        ? ((shares[0]?.number ?? 1) - (shares[userIdx]?.number ?? 0)) /
-          (shares[0]?.number ?? 1)
-        : 0;
-    const label = getLabel(pct);
+    const total = shares[0]?.number ?? 1;
+    const strictlyAbove = (shares[userIdx + 1]?.number ?? 0) / total;
+    const label = getLabel((total - (shares[userIdx]?.number ?? 0)) / total);
     const labelWithArticle = label.includes("neutral") ? label : `a ${label}`;
-    return `I'm ${labelWithArticle}! I think Downtown Manhattan starts at ${userBoundary.name}, which is more ${dirWord} than ${Math.round(shown * 100)}% of respondents! https://wheredown.town`;
+    const pctToShow = Math.round(strictlyAbove * 100);
+    return `My downtown elitism index is ${pctToShow}! I think Downtown Manhattan starts at ${userBoundary.name}, which makes me ${labelWithArticle}. https://wheredown.town`;
   }
 
   async function handleShare() {
@@ -469,10 +465,10 @@ export default function MapView({
     const shares = regionSharesRef.current;
     if (!shares.length) return;
     const total = shares[0]?.number ?? 1;
-    const { shown, dirWord } = getShownPct(shares, boundary.index);
-    headerTextPercentRef.current.textContent = `${Math.round(shown * 100)}%`;
-    headerTextRef.current.textContent = ` of respondents placed the boundary `;
-    headerTextHighlightRef.current.textContent = `${dirWord} ${boundary.name}`;
+    const above = (shares[boundary.index + 1]?.number ?? 0) / total;
+    headerTextPercentRef.current.textContent = `${Math.round(above * 100)}%`;
+    headerTextRef.current.textContent = ` of people placed the boundary `;
+    headerTextHighlightRef.current.textContent = `above ${boundary.name}`;
   }
 
   // Main map setup — runs once
@@ -675,10 +671,11 @@ export default function MapView({
         return;
       const shares = regionSharesRef.current;
       if (!shares.length) return;
-      const { shown, dirWord } = getShownPct(shares, boundary.index);
-      headerTextPercentRef.current.textContent = `${Math.round(shown * 100)}%`;
-      headerTextRef.current.textContent = ` of respondents placed the boundary `;
-      headerTextHighlightRef.current.textContent = `${dirWord} ${boundary.name}`;
+      const total = shares[0]?.number ?? 1;
+      const above = (shares[boundary.index + 1]?.number ?? 0) / total;
+      headerTextPercentRef.current.textContent = `${Math.round(above * 100)}%`;
+      headerTextRef.current.textContent = ` of people placed the boundary `;
+      headerTextHighlightRef.current.textContent = `above ${boundary.name}`;
     }
 
     function updateGraph() {
@@ -716,36 +713,16 @@ export default function MapView({
       const eastX = (eastPos?.x ?? svgLeft) - svgLeft;
       const eastY = eastPos?.y ?? markerY;
 
-      const totalVotes = regionSharesRef.current[0]?.number ?? 1;
-      const votesAtOrBelow =
-        totalVotes - (regionSharesRef.current[activeIdx]?.number ?? 0);
-      const votesAbove = regionSharesRef.current[activeIdx]?.number ?? 0;
-      const shadeLargerHalf = votesAbove > votesAtOrBelow ? "above" : "below";
-
       const polyPts = points.map((p) => `${p.x},${p.y}`).join(" ");
 
-      let shadedPts: string;
-      if (shadeLargerHalf === "above") {
-        const abovePts = points.filter((p) => p.y <= markerY);
-        if (abovePts.length > 0) {
-          const topPtY = Math.min(...abovePts.map((p) => p.y));
-          shadedPts =
-            `0,${markerY} ` +
-            abovePts.map((p) => `${p.x},${p.y}`).join(" ") +
-            ` 0,${topPtY}`;
-        } else {
-          shadedPts = "";
-        }
-      } else {
-        const belowPts = points.filter((p) => p.y >= markerY);
-        if (belowPts.length > 0) {
-          const bottomPtY = Math.max(...belowPts.map((p) => p.y));
-          shadedPts =
-            `0,${markerY} 0,${bottomPtY} ` +
-            belowPts.map((p) => `${p.x},${p.y}`).join(" ");
-        } else {
-          shadedPts = "";
-        }
+      const abovePts = points.filter((p) => p.y <= markerY);
+      let shadedPts = "";
+      if (abovePts.length > 0) {
+        const topPtY = Math.min(...abovePts.map((p) => p.y));
+        shadedPts =
+          `0,${markerY} ` +
+          abovePts.map((p) => `${p.x},${p.y}`).join(" ") +
+          ` 0,${topPtY}`;
       }
 
       svg.innerHTML = `
@@ -876,16 +853,16 @@ export default function MapView({
         if (headerLabelRef.current)
           headerLabelRef.current.classList.add(styles.resultsLabelDragging);
         const shares = regionSharesRef.current;
-        const { shown, dirWord } = getShownPct(shares, boundary.index);
+        const total = shares[0]?.number ?? 1;
+        const above = (shares[boundary.index + 1]?.number ?? 0) / total;
         if (headerLabelRef.current)
-          headerLabelRef.current.textContent = `${Math.round(shown * 100)}%`;
+          headerLabelRef.current.textContent = `${Math.round(above * 100)}%`;
         if (headerTextPercentRef.current)
           headerTextPercentRef.current.textContent = "";
         if (headerTextRef.current)
-          headerTextRef.current.textContent =
-            "of respondents placed the boundary ";
+          headerTextRef.current.textContent = "of people placed the boundary ";
         if (headerTextHighlightRef.current)
-          headerTextHighlightRef.current.textContent = `${dirWord} ${boundary.name}`;
+          headerTextHighlightRef.current.textContent = `above ${boundary.name}`;
       }
 
       function showRestingHeader() {
@@ -1111,6 +1088,7 @@ export default function MapView({
               className={styles.resultsTextHighlight}
             />
             <span ref={headerTextRef} />
+            <br />
             <span
               ref={headerTextHighlightRef}
               className={`${styles.resultsTextHighlight} ${styles.noWrap}`}
