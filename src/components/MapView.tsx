@@ -18,14 +18,25 @@ const ZOOM_BREAKPOINT_WIDTH = 1000;
 const RESULTS_ZOOM_BREAKPOINT_HEIGHT = 900;
 const ZOOM_SCALE = 1;
 
-// --- Results graph layout ---
-// Graph panel width: grows from GRAPH_SCREEN_FRACTION of the screen up to MAX_GRAPH_WIDTH,
-// then keeps growing once the left panel would exceed MAX_LEFT_PANEL_WIDTH.
-const GRAPH_SCREEN_FRACTION = 0.5; // fraction of screen width used by graph on small screens
-const MAX_GRAPH_WIDTH = 480; // graph width cap before left-panel cap kicks in
-const MAX_LEFT_PANEL_WIDTH = 400; // map area never exceeds this; graph grows beyond it
-// Fraction of graph width used by the bar chart line (leaves right margin).
-const GRAPH_BAR_FRACTION = 0.85;
+// --- Results page layout ---
+// Column fractions for the three sections: map | graph | text.
+// Text fraction is 0 on narrow screens (no text column).
+const LAYOUT_BREAKPOINT = 700; // px — threshold for wide (three-column) layout
+const NARROW_LAYOUT = { map: 0.55, graph: 0.45, text: 0 };
+const WIDE_LAYOUT = { map: 0.4, graph: 0.3, text: 0.3 };
+
+function getResultsLayout(screenWidth: number) {
+  const col = screenWidth >= LAYOUT_BREAKPOINT ? WIDE_LAYOUT : NARROW_LAYOUT;
+  return {
+    mapWidth: Math.round(screenWidth * col.map),
+    graphWidth: Math.round(screenWidth * col.graph),
+    textWidth: Math.round(screenWidth * col.text),
+  };
+}
+
+// --- Chart rendering ---
+// Fraction of graph panel width used by the bar chart line (leaves right margin).
+const GRAPH_BAR_FRACTION = 0.8;
 // Maximum bar length in px (the "height" of a bar in horizontal-bar-chart terms).
 const MAX_BAR_WIDTH = 300;
 // Minimum bar width in px so zero-vote items don't cause the curve to touch x=0.
@@ -323,6 +334,7 @@ export default function MapView({
   const labelRef = useRef<HTMLDivElement>(null);
   const downtownLabelRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const resultsHeaderRef = useRef<HTMLDivElement | null>(null);
   const headerLabelRef = useRef<HTMLDivElement | null>(null);
   const headerTextRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -619,7 +631,7 @@ export default function MapView({
       const markerY = graphYs[activeIdx];
       const eastPos = getEastScreenPos(activeIdx);
       // Convert east coast screen X to SVG-local coordinates (may be negative)
-      const svgLeft = window.innerWidth - W;
+      const svgLeft = svg.getBoundingClientRect().left;
       const eastX = (eastPos?.x ?? svgLeft) - svgLeft;
       const eastY = eastPos?.y ?? markerY;
 
@@ -691,6 +703,35 @@ export default function MapView({
       return closest;
     }
 
+    function applyLayout() {
+      const { graphWidth, textWidth } = getResultsLayout(window.innerWidth);
+      if (svgRef.current) {
+        svgRef.current.style.width = graphWidth + "px";
+        svgRef.current.style.right = textWidth + "px";
+      }
+      if (resultsHeaderRef.current) {
+        const isWide = textWidth > 0;
+        if (isWide) {
+          Object.assign(resultsHeaderRef.current.style, {
+            right: "0px",
+            left: "auto",
+            top: "50%",
+            transform: "translateY(-50%)",
+            width: textWidth + "px",
+          });
+        } else {
+          Object.assign(resultsHeaderRef.current.style, {
+            right: "auto",
+            left: "50%",
+            top: "24px",
+            transform: "translateX(-50%)",
+            width: "auto",
+          });
+        }
+      }
+      return { graphWidth, textWidth };
+    }
+
     function enterResultsMode() {
       // Hide voting UI elements
       if (labelRef.current) labelRef.current.style.display = "none";
@@ -712,17 +753,8 @@ export default function MapView({
         }
       });
 
-      const graphWidth = Math.max(
-        Math.min(window.innerWidth * GRAPH_SCREEN_FRACTION, MAX_GRAPH_WIDTH),
-        window.innerWidth - MAX_LEFT_PANEL_WIDTH,
-      );
+      const { graphWidth, textWidth } = applyLayout();
 
-      // Resize SVG
-      if (svgRef.current) {
-        svgRef.current.style.width = graphWidth + "px";
-      }
-
-      // Pan map with padding so Manhattan fills left half
       map.easeTo({
         center: RESULTS_CENTER,
         zoom: getAdaptiveZoom(
@@ -731,7 +763,7 @@ export default function MapView({
           RESULTS_ZOOM,
         ),
         bearing: BEARING,
-        padding: { right: graphWidth, left: 0, top: 0, bottom: 0 },
+        padding: { right: graphWidth + textWidth, left: 0, top: 0, bottom: 0 },
         duration: 1000,
       });
 
@@ -880,20 +912,19 @@ export default function MapView({
     function onResize() {
       map.resize();
       if (votedRef.current) {
-        const graphWidth = Math.max(
-          Math.min(window.innerWidth * GRAPH_SCREEN_FRACTION, MAX_GRAPH_WIDTH),
-          window.innerWidth - MAX_LEFT_PANEL_WIDTH,
-        );
-        if (svgRef.current) {
-          svgRef.current.style.width = graphWidth + "px";
-        }
+        const { graphWidth, textWidth } = applyLayout();
         map.jumpTo({
           zoom: getAdaptiveZoom(
             window.innerHeight,
             RESULTS_ZOOM_BREAKPOINT_HEIGHT,
             RESULTS_ZOOM,
           ),
-          padding: { right: graphWidth, left: 0, top: 0, bottom: 0 },
+          padding: {
+            right: graphWidth + textWidth,
+            left: 0,
+            top: 0,
+            bottom: 0,
+          },
         });
         updateGraph();
         updateAll(activeBoundaryRef.current);
@@ -943,7 +974,7 @@ export default function MapView({
         </button>
       )}
       {voted && (
-        <div className={styles.resultsHeader}>
+        <div ref={resultsHeaderRef} className={styles.resultsHeader}>
           <div ref={headerLabelRef} className={styles.resultsLabel} />
           <div ref={headerTextRef} className={styles.resultsText} />
         </div>
