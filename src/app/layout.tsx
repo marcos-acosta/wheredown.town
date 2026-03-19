@@ -15,6 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "wheredown.town",
   description: "Where downtown?",
+  themeColor: "#1f1f1f",
 };
 
 export default function RootLayout({
