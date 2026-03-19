@@ -793,7 +793,7 @@ export default function MapView({
             left: "50%",
             top: "24px",
             transform: "translateX(-50%)",
-            width: "auto",
+            width: "100vw",
           });
         }
       }
