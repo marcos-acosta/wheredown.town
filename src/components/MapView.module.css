@@ -49,8 +49,18 @@
   border: none;
   cursor: pointer;
   white-space: nowrap;
-  transition: box-shadow 0.5s;
+  transition: box-shadow 0.5s, background-color 0.5s;
   border-radius: 3px;
+}
+
+.voteButton:disabled {
+  background-color: gray;
+  box-shadow: none;
+  cursor: initial;
+}
+
+.voteButton:disabled:hover {
+  box-shadow: none;
 }
 
 .voteButton:hover {

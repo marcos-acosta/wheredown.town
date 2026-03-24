@@ -356,6 +356,7 @@ export default function MapView({
   regionShares,
   userBoundaryIndex,
 }: MapViewProps) {
+  const [mapLoaded, setMapLoaded] = useState(false);
   const [voting, setVoting] = useState(false);
   const [showLoading, setShowLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -1028,6 +1029,7 @@ export default function MapView({
       container.addEventListener("wheel", onWheel, { passive: false });
       container.addEventListener("touchstart", onTouchStart, { passive: true });
       container.addEventListener("touchmove", onTouchMove, { passive: false });
+      setMapLoaded(true);
     });
 
     function onResize() {
@@ -1088,6 +1090,7 @@ export default function MapView({
       </div>
       {!voted && (
         <button
+          disabled={!mapLoaded}
           className={`${styles.voteButton}${voting ? ` ${styles.voteButtonVoting}` : ""}`}
           onClick={() => {
             if (voting) return;
